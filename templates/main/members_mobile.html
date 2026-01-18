@@ -1,0 +1,441 @@
+{% extends "base.html" %}
+{% block title %}Members - CellApp{% endblock %}
+
+{% block mobile_content %}
+<div class="members-page">
+    <!-- Header Section -->
+    <div class="page-header">
+        <div class="header-icon">
+            <i class="fas fa-users"></i>
+        </div>
+        <h1>Member List</h1>
+        <p>Manage your cell group members</p>
+    </div>
+
+    <!-- Add Member Button -->
+    <div class="add-member-button-container">
+        <a href="{{ url_for('main.member_form') }}" class="btn btn-primary btn-add-member">
+            <i class="fas fa-plus me-2"></i>Add New Member
+        </a>
+    </div>
+
+    <!-- Members List Section -->
+    <div class="members-list-card">
+        <div class="card-header">
+            <h3><i class="fas fa-list me-2"></i>Members List <span class="member-count-inline">({{ members|length }})</span></h3>
+        </div>
+        
+        <div class="members-content">
+            {% if members %}
+                <div class="members-list">
+                    {% for member in members %}
+                        <a href="{{ url_for('main.member_details', member_id=member.id) }}" class="member-item {{ 'potential-leader' if member.potential_leader else '' }}">
+                            <div class="member-content">
+                                <div class="member-number">{{ loop.index }}</div>
+                                <div class="member-details">
+                                    <div class="member-name">
+                                        {{ member.name }}
+                                        {% if member.potential_leader %}
+                                            <i class="fas fa-star" style="color: #FFD700; margin-left: 8px; font-size: 0.9em;"></i>
+                                        {% endif %}
+                                    </div>
+                                    <div class="member-info">{{ member.phone_number or 'No phone' }}</div>
+                                    <div class="member-email">{{ member.email or 'No email' }}</div>
+                                </div>
+                                <div class="member-arrow">
+                                    <i class="fas fa-chevron-right"></i>
+                                </div>
+                            </div>
+                        </a>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <div class="empty-state-icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <h3>No Members Yet</h3>
+                    <p>Start by adding your first cell group member</p>
+                    <a href="{{ url_for('main.member_form') }}" class="btn btn-primary">
+                        <i class="fas fa-plus me-2"></i>Add First Member
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block mobile_nav %}
+<a href="{{ url_for('main.index') }}" class="nav-link">
+    <i class="fas fa-home"></i>
+    <span>Home</span>
+</a>
+<a href="{{ url_for('main.members') }}" class="nav-link active">
+    <i class="fas fa-users"></i>
+    <span>Members</span>
+</a>
+<a href="{{ url_for('main.profile') }}" class="nav-link">
+    <i class="fas fa-user"></i>
+    <span>Profile</span>
+</a>
+<a href="{{ url_for('auth.logout') }}" class="nav-link">
+    <i class="fas fa-sign-out-alt"></i>
+    <span>Logout</span>
+</a>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Mobile Members Page Styling */
+.members-page {
+    padding: 0;
+    margin: 0;
+    padding-bottom: 5rem; /* Add space for fixed bottom nav bar */
+}
+
+/* Page Header */
+.page-header {
+    text-align: center;
+    margin-bottom: 2rem;
+    padding: 1rem 0;
+}
+
+.header-icon {
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, #1F6FEB, #2c7bb6);
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1rem;
+    box-shadow: 0 8px 32px rgba(31, 111, 235, 0.3);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.header-icon i {
+    font-size: 24px;
+    color: white;
+}
+
+.page-header h1 {
+    color: #f0f6fc;
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    letter-spacing: -0.5px;
+}
+
+.page-header p {
+    color: #8b949e;
+    font-size: 1rem;
+    margin: 0;
+}
+
+/* Add Member Button Container (Mobile) */
+.add-member-button-container {
+    margin-bottom: 1.5rem;
+    text-align: center;
+}
+
+.btn-add-member {
+    width: 100%;
+    padding: 1rem 2rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    border-radius: 12px;
+    box-shadow: 0 6px 24px rgba(31, 111, 235, 0.3);
+    transition: all 0.3s ease;
+}
+
+.btn-add-member:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(31, 111, 235, 0.4);
+}
+
+/* Card Styling */
+.members-list-card {
+    background: linear-gradient(135deg, #21262d 0%, #161b22 100%);
+    border: 1px solid #30363d;
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.members-list-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+}
+
+/* Card Headers */
+.card-header {
+    background: linear-gradient(135deg, #30363d 0%, #21262d 100%);
+    padding: 1rem;
+    border-bottom: 1px solid #30363d;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.card-header h3 {
+    color: #f0f6fc;
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin: 0;
+    display: flex;
+    align-items: center;
+}
+
+.card-header h3 i {
+    color: #1F6FEB;
+    font-size: 1.1rem;
+}
+
+.member-count-inline {
+    color: #1F6FEB;
+    font-weight: 600;
+    font-size: 0.9em;
+    margin-left: 0.5rem;
+}
+
+/* Members Content */
+.members-content {
+    padding: 1rem;
+}
+
+/* Member List Items */
+.member-item {
+    background: linear-gradient(135deg, #21262d 0%, #161b22 100%);
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    text-decoration: none;
+    display: block;
+    position: relative;
+    overflow: hidden;
+}
+
+.member-item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+    transition: left 0.5s ease;
+}
+
+.member-item:hover::before {
+    left: 100%;
+}
+
+.member-item:hover {
+    background: linear-gradient(135deg, #30363d 0%, #21262d 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    border-color: #1F6FEB;
+    text-decoration: none;
+}
+
+.member-item:last-child {
+    margin-bottom: 0;
+}
+
+/* Potential Leader Styling */
+.member-item.potential-leader {
+    background: linear-gradient(135deg, #2d1b0e 0%, #1a1005 100%);
+    border: 2px solid #FFD700;
+    box-shadow: 0 4px 16px rgba(255, 215, 0, 0.2);
+}
+
+.member-item.potential-leader:hover {
+    background: linear-gradient(135deg, #3d2b1e 0%, #2a2015 100%);
+    border-color: #FFA500;
+    box-shadow: 0 8px 24px rgba(255, 215, 0, 0.3);
+}
+
+.member-item.potential-leader .member-number {
+    background: linear-gradient(135deg, #FFD700, #FFA500);
+    color: #1a1005;
+    box-shadow: 0 4px 16px rgba(255, 215, 0, 0.3);
+    border: 2px solid rgba(255, 215, 0, 0.3);
+}
+
+.member-item.potential-leader:hover .member-number {
+    background: linear-gradient(135deg, #FFA500, #FFD700);
+    transform: scale(1.05);
+    box-shadow: 0 6px 20px rgba(255, 215, 0, 0.4);
+}
+
+.member-item.potential-leader .member-arrow {
+    color: #FFD700;
+}
+
+.member-item.potential-leader:hover .member-arrow {
+    color: #FFA500;
+    transform: translateX(3px);
+}
+
+/* Member Item Content */
+.member-content {
+    display: flex;
+    align-items: center;
+    position: relative;
+    z-index: 1;
+}
+
+.member-number {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, #6e7681, #8b949e);
+    color: white;
+    font-weight: 700;
+    font-size: 14px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 1rem;
+    flex-shrink: 0;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 16px rgba(110, 118, 129, 0.3);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.member-item:hover .member-number {
+    background: linear-gradient(135deg, #1F6FEB, #2c7bb6);
+    transform: scale(1.05);
+    box-shadow: 0 6px 20px rgba(31, 111, 235, 0.4);
+}
+
+.member-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.member-name {
+    color: #f0f6fc;
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.member-info {
+    color: #8b949e;
+    font-size: 0.85rem;
+    margin-bottom: 0.25rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.member-email {
+    color: #6e7681;
+    font-size: 0.8rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.member-arrow {
+    color: #6e7681;
+    font-size: 1rem;
+    margin-left: 1rem;
+    transition: all 0.3s ease;
+    flex-shrink: 0;
+}
+
+.member-item:hover .member-arrow {
+    color: #1F6FEB;
+    transform: translateX(3px);
+}
+
+/* Empty State */
+.empty-state {
+    text-align: center;
+    padding: 3rem 2rem;
+    background: linear-gradient(135deg, #21262d 0%, #161b22 100%);
+    border-radius: 12px;
+    border: 1px solid #30363d;
+}
+
+.empty-state-icon {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, #6e7681, #8b949e);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1.5rem;
+    box-shadow: 0 8px 32px rgba(110, 118, 129, 0.3);
+}
+
+.empty-state-icon i {
+    font-size: 32px;
+    color: white;
+}
+
+.empty-state h3 {
+    color: #f0f6fc;
+    font-size: 1.4rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+}
+
+.empty-state p {
+    color: #8b949e;
+    font-size: 1rem;
+    margin-bottom: 2rem;
+}
+
+/* Button Styling */
+.btn-primary {
+    background: linear-gradient(135deg, #1F6FEB, #2c7bb6);
+    border: none;
+    border-radius: 8px;
+    padding: 0.6rem 1.2rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 16px rgba(31, 111, 235, 0.3);
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #2c7bb6, #1F6FEB);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(31, 111, 235, 0.4);
+}
+
+/* Animation */
+@keyframes slideInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.member-item {
+    animation: slideInUp 0.3s ease forwards;
+}
+
+.member-item:nth-child(1) { animation-delay: 0.1s; }
+.member-item:nth-child(2) { animation-delay: 0.2s; }
+.member-item:nth-child(3) { animation-delay: 0.3s; }
+.member-item:nth-child(4) { animation-delay: 0.4s; }
+.member-item:nth-child(5) { animation-delay: 0.5s; }
+</style>
+{% endblock %}

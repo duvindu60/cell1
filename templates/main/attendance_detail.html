@@ -1,0 +1,1706 @@
+{% extends "base.html" %}
+
+{% block title %}Attendance - {{ meeting_date }}{% endblock %}
+
+{% block mobile_content %}
+<!-- MOBILE ATTENDANCE UI -->
+<div class="mobile-attendance-container">
+    <!-- Mobile Header -->
+    <div class="mobile-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h3 class="text-white fw-bold mb-1">📱 Attendance</h3>
+                <p class="text-light mb-0">{{ meeting_date }}</p>
+            </div>
+            <a href="{{ url_for('main.meeting_dates') }}" class="btn btn-outline-light btn-sm">
+                <i class="fas fa-arrow-left"></i>
+            </a>
+        </div>
+    </div>
+    
+    <!-- Mobile Stats -->
+    <div class="mobile-stats">
+        <div class="row g-2">
+            <div class="col-3">
+                <div class="stat-card present">
+                    <div class="stat-icon">✅</div>
+                    <div class="stat-number" id="presentCount-mobile">0</div>
+                    <div class="stat-label">Present</div>
+                </div>
+            </div>
+            <div class="col-3">
+                <div class="stat-card absent">
+                    <div class="stat-icon">❌</div>
+                    <div class="stat-number" id="absentCount-mobile">0</div>
+                    <div class="stat-label">Absent</div>
+                </div>
+            </div>
+            <div class="col-3">
+                <div class="stat-card pending">
+                    <div class="stat-icon">⏳</div>
+                    <div class="stat-number" id="pendingCount-mobile">0</div>
+                    <div class="stat-label">Pending</div>
+                </div>
+            </div>
+            <div class="col-3">
+                <div class="stat-card total">
+                    <div class="stat-icon">👥</div>
+                    <div class="stat-number">{{ members|length }}</div>
+                    <div class="stat-label">Total</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Mobile Members List -->
+    <div class="mobile-members-section">
+        <h5 class="section-title">Members</h5>
+        {% if members %}
+            <div class="mobile-members-list">
+                {% for member in members %}
+                <div class="mobile-member-card {% if attendance_data[member.id].present %}status-present{% elif attendance_data[member.id].absent %}status-absent{% else %}status-pending{% endif %}" data-member-id="{{ member.id }}">
+                    <div class="member-info">
+                        <div class="member-avatar-mobile">
+                            <span class="avatar-text">{{ member.name[0].upper() }}</span>
+                        </div>
+                        <div class="member-details">
+                            <h6 class="member-name">{{ member.name }}</h6>
+                            <div class="member-meta">
+                                {% if member.phone_number %}
+                                <span class="meta-item">
+                                    <i class="fas fa-phone"></i> {{ member.phone_number }}
+                                </span>
+                                {% endif %}
+                                {% if member.ministry %}
+                                <span class="meta-item">
+                                    <i class="fas fa-church"></i> {{ member.ministry }}
+                                </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="member-actions">
+                        <div class="action-buttons-mobile">
+                            <button type="button" 
+                                    class="action-btn present-btn-mobile {% if attendance_data[member.id].present %}active{% endif %}"
+                                    data-member-id="{{ member.id }}"
+                                    onclick="updateAttendanceMobile('{{ member.id }}', 'present', '{{ meeting_date }}')">
+                                <i class="fas fa-check"></i>
+                            </button>
+                            <button type="button" 
+                                    class="action-btn absent-btn-mobile {% if attendance_data[member.id].absent %}active{% endif %}"
+                                    data-member-id="{{ member.id }}"
+                                    onclick="updateAttendanceMobile('{{ member.id }}', 'absent', '{{ meeting_date }}')">
+                                <i class="fas fa-times"></i>
+                            </button>
+                            <button type="button" 
+                                    class="action-btn clear-btn-mobile"
+                                    data-member-id="{{ member.id }}"
+                                    onclick="updateAttendanceMobile('{{ member.id }}', 'clear', '{{ meeting_date }}')">
+                                <i class="fas fa-undo"></i>
+                            </button>
+                        </div>
+                        <div class="status-badge-mobile">
+                            <span class="status-text-mobile {% if attendance_data[member.id].present %}text-success{% elif attendance_data[member.id].absent %}text-danger{% else %}text-muted{% endif %}" id="status-{{ member.id }}-mobile">
+                                {% if attendance_data[member.id].present %}
+                                    Present
+                                {% elif attendance_data[member.id].absent %}
+                                    Absent
+                                {% else %}
+                                    Not marked
+                                {% endif %}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="no-members-mobile">
+                <i class="fas fa-users"></i>
+                <h5>No members found</h5>
+                <p>Add some members to mark attendance.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Mobile CSS -->
+<style>
+.mobile-attendance-container {
+        padding: 1rem;
+    min-height: calc(100vh - 5rem);
+    padding-bottom: 5rem;
+    background: #1a1a1a;
+}
+
+.mobile-header {
+    background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+    padding: 1.5rem;
+    border-radius: 20px;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+    border: 1px solid #34495e;
+}
+
+.mobile-stats {
+    margin-bottom: 1.5rem;
+}
+
+.stat-card {
+    background: #2c3e50;
+    border-radius: 15px;
+    padding: 1rem;
+        text-align: center;
+    border: 2px solid #34495e;
+    transition: all 0.3s ease;
+}
+
+.stat-card.present {
+    border-color: #27ae60;
+    background: #2c3e50;
+}
+
+.stat-card.absent {
+    border-color: #e74c3c;
+    background: #2c3e50;
+}
+
+.stat-card.pending {
+    border-color: #f39c12;
+    background: #2c3e50;
+}
+
+.stat-card.total {
+    border-color: #3498db;
+    background: #2c3e50;
+}
+
+.stat-icon {
+    font-size: 1.5rem;
+        margin-bottom: 0.5rem;
+}
+
+.stat-number {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: white;
+    margin-bottom: 0.25rem;
+}
+
+.stat-label {
+    font-size: 0.75rem;
+    color: #bdc3c7;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.mobile-members-section {
+    background: #2c3e50;
+        border-radius: 20px;
+        padding: 1.5rem;
+    border: 1px solid #34495e;
+}
+
+.section-title {
+    color: white;
+    font-weight: bold;
+    margin-bottom: 1rem;
+    text-align: center;
+}
+
+.mobile-members-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.mobile-member-card {
+    background: #34495e;
+    border-radius: 15px;
+    padding: 1rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    transition: all 0.3s ease;
+    border: 1px solid #34495e;
+}
+
+.mobile-member-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+    border-color: #3498db;
+}
+
+.mobile-member-card.status-present {
+    border-left: 4px solid #27ae60;
+    border-right: 4px solid #27ae60;
+    border-top: 2px solid #27ae60;
+    border-bottom: 2px solid #27ae60;
+    background: #34495e;
+}
+
+.mobile-member-card.status-absent {
+    border-left: 4px solid #e74c3c;
+    border-right: 4px solid #e74c3c;
+    border-top: 2px solid #e74c3c;
+    border-bottom: 2px solid #e74c3c;
+    background: #34495e;
+}
+
+.mobile-member-card.status-pending {
+    border-left: 4px solid #f39c12;
+    border-right: 4px solid #f39c12;
+    border-top: 2px solid #f39c12;
+    border-bottom: 2px solid #f39c12;
+    background: #34495e;
+}
+
+.member-info {
+    display: flex;
+    align-items: center;
+    flex: 1;
+}
+
+.member-avatar-mobile {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 1rem;
+    box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3);
+}
+
+.avatar-text {
+    color: white;
+    font-weight: bold;
+    font-size: 1.2rem;
+}
+
+.member-details {
+    flex: 1;
+}
+
+.member-name {
+    color: white;
+    font-weight: bold;
+    margin-bottom: 0.25rem;
+}
+
+.member-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.meta-item {
+    font-size: 0.8rem;
+    color: #bdc3c7;
+}
+
+.meta-item i {
+    margin-right: 0.5rem;
+    color: #95a5a6;
+}
+
+.member-actions {
+        display: flex;
+    flex-direction: column;
+        align-items: center;
+    gap: 0.5rem;
+}
+
+.action-buttons-mobile {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.action-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    border: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    font-size: 1rem;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.action-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+}
+
+.present-btn-mobile {
+    background: #27ae60;
+    color: white;
+}
+
+.absent-btn-mobile {
+    background: #e74c3c;
+    color: white;
+}
+
+.clear-btn-mobile {
+    background: #f39c12;
+    color: white;
+}
+
+.action-btn.active {
+    transform: scale(1.2);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+}
+
+.status-badge-mobile {
+        text-align: center;
+}
+
+.status-text-mobile {
+    font-size: 0.7rem;
+    padding: 0.3rem 0.8rem;
+    border-radius: 15px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.status-text-mobile.text-success {
+    background: #27ae60;
+    color: white;
+}
+
+.status-text-mobile.text-danger {
+    background: #e74c3c;
+    color: white;
+}
+
+.status-text-mobile.text-muted {
+    background: #7f8c8d;
+    color: white;
+}
+
+.no-members-mobile {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: #95a5a6;
+}
+
+.no-members-mobile i {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+}
+
+.no-members-mobile h5 {
+    color: #bdc3c7;
+        margin-bottom: 0.5rem;
+    }
+    
+.no-members-mobile p {
+    color: #95a5a6;
+    margin: 0;
+}
+</style>
+
+<!-- Mobile JavaScript -->
+<script>
+function updateAttendanceMobile(memberId, status, meetingDate) {
+    const memberCard = document.querySelector(`[data-member-id="${memberId}"]`);
+    
+    // Check if memberCard exists
+    if (!memberCard) {
+        console.error(`Member card not found for memberId: ${memberId}`);
+        showFeedbackMobile('Error: Member card not found', 'error');
+        return;
+    }
+    
+    const buttons = memberCard.querySelectorAll('.action-btn');
+    
+    // Add loading state
+    buttons.forEach(btn => {
+        if (btn) {
+            btn.style.opacity = '0.6';
+            btn.style.pointerEvents = 'none';
+        }
+    });
+    
+    fetch(`/update_attendance/${encodeURIComponent(meetingDate)}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `member_id=${memberId}&status=${status}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            setMemberStatusMobile(memberId, status);
+            updateStatsMobile();
+            showFeedbackMobile(data.message, 'success');
+            
+            // Success animation
+            if (memberCard) {
+                memberCard.style.transform = 'scale(1.02)';
+                setTimeout(() => {
+                    if (memberCard) {
+                        memberCard.style.transform = 'scale(1)';
+                    }
+                }, 200);
+            }
+        } else {
+            showFeedbackMobile(data.message, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showFeedbackMobile('Network error', 'error');
+    })
+    .finally(() => {
+        // Remove loading state
+        buttons.forEach(btn => {
+            if (btn) {
+                btn.style.opacity = '1';
+                btn.style.pointerEvents = 'auto';
+            }
+        });
+    });
+}
+
+function setMemberStatusMobile(memberId, status) {
+    const memberCard = document.querySelector(`[data-member-id="${memberId}"]`);
+    
+    // Check if memberCard exists
+    if (!memberCard) {
+        console.error(`Member card not found for memberId: ${memberId}`);
+        return;
+    }
+    
+    const statusElement = document.getElementById(`status-${memberId}-mobile`);
+    const buttons = memberCard.querySelectorAll('.action-btn');
+    
+    // Remove all active classes
+    buttons.forEach(btn => {
+        if (btn) {
+            btn.classList.remove('active');
+        }
+    });
+    
+    if (memberCard) {
+        memberCard.classList.remove('status-present', 'status-absent', 'status-pending');
+    }
+    
+    if (status === 'present') {
+        if (memberCard) {
+            memberCard.classList.add('status-present');
+        }
+        if (statusElement) {
+            statusElement.textContent = 'Present';
+            statusElement.className = 'status-text-mobile text-success';
+        }
+        const presentBtn = memberCard.querySelector('.present-btn-mobile');
+        if (presentBtn) {
+            presentBtn.classList.add('active');
+        }
+    } else if (status === 'absent') {
+        if (memberCard) {
+            memberCard.classList.add('status-absent');
+        }
+        if (statusElement) {
+            statusElement.textContent = 'Absent';
+            statusElement.className = 'status-text-mobile text-danger';
+        }
+        const absentBtn = memberCard.querySelector('.absent-btn-mobile');
+        if (absentBtn) {
+            absentBtn.classList.add('active');
+        }
+    } else {
+        if (memberCard) {
+            memberCard.classList.add('status-pending');
+        }
+        if (statusElement) {
+            statusElement.textContent = 'Not marked';
+            statusElement.className = 'status-text-mobile text-muted';
+        }
+    }
+}
+
+function updateStatsMobile() {
+    const presentCards = document.querySelectorAll('.mobile-member-card.status-present').length;
+    const absentCards = document.querySelectorAll('.mobile-member-card.status-absent').length;
+    const pendingCards = document.querySelectorAll('.mobile-member-card.status-pending').length;
+    
+    const presentCountEl = document.getElementById('presentCount-mobile');
+    const absentCountEl = document.getElementById('absentCount-mobile');
+    const pendingCountEl = document.getElementById('pendingCount-mobile');
+    
+    if (presentCountEl) {
+        presentCountEl.textContent = presentCards;
+    }
+    if (absentCountEl) {
+        absentCountEl.textContent = absentCards;
+    }
+    if (pendingCountEl) {
+        pendingCountEl.textContent = pendingCards;
+    }
+}
+
+function showFeedbackMobile(message, type) {
+    // Create toast notification
+    const toast = document.createElement('div');
+    toast.className = `toast-mobile ${type}`;
+    toast.innerHTML = `
+        <div class="toast-content">
+            <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i>
+            <span>${message}</span>
+        </div>
+    `;
+    
+    document.body.appendChild(toast);
+    
+    // Show toast
+    setTimeout(() => toast.classList.add('show'), 100);
+    
+    // Remove toast after 3 seconds
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => document.body.removeChild(toast), 300);
+    }, 3000);
+}
+
+// Initialize mobile attendance
+document.addEventListener('DOMContentLoaded', function() {
+    updateStatsMobile();
+});
+</script>
+
+<!-- Mobile Toast Styles -->
+<style>
+.toast-mobile {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-100px);
+    background: #2c3e50;
+    color: white;
+    padding: 1rem 1.5rem;
+    border-radius: 10px;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.5);
+    z-index: 9999;
+        transition: all 0.3s ease;
+    border: 1px solid #34495e;
+}
+
+.toast-mobile.show {
+    transform: translateX(-50%) translateY(0);
+}
+
+.toast-mobile.success {
+    background: linear-gradient(135deg, #27ae60, #2ecc71);
+    border-color: #27ae60;
+}
+
+.toast-mobile.error {
+    background: linear-gradient(135deg, #e74c3c, #c0392b);
+    border-color: #e74c3c;
+}
+
+.toast-content {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.toast-content i {
+    font-size: 1.2rem;
+}
+</style>
+{% endblock %}
+
+{% block desktop_content %}
+<!-- DESKTOP ATTENDANCE UI -->
+<div class="desktop-attendance-container">
+    <!-- Desktop Header -->
+    <div class="desktop-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="text-white fw-bold mb-1">🖥️ Attendance Management</h2>
+                <p class="text-light mb-0">{{ meeting_date }}</p>
+            </div>
+            <a href="{{ url_for('main.meeting_dates') }}" class="btn btn-outline-light">
+                <i class="fas fa-arrow-left me-2"></i>Back to Meeting Dates
+            </a>
+        </div>
+    </div>
+
+    <!-- Desktop Stats Dashboard -->
+    <div class="desktop-stats-dashboard">
+        <div class="row g-4">
+            <div class="col-lg-3 col-md-6">
+                <div class="stat-card-desktop present">
+                    <div class="stat-icon-desktop">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-number-desktop" id="presentCount-desktop">0</div>
+                        <div class="stat-label-desktop">Present</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="stat-card-desktop absent">
+                    <div class="stat-icon-desktop">
+                        <i class="fas fa-times-circle"></i>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-number-desktop" id="absentCount-desktop">0</div>
+                        <div class="stat-label-desktop">Absent</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="stat-card-desktop pending">
+                    <div class="stat-icon-desktop">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-number-desktop" id="pendingCount-desktop">0</div>
+                        <div class="stat-label-desktop">Pending</div>
+                </div>
+            </div>
+                </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="stat-card-desktop total">
+                    <div class="stat-icon-desktop">
+            <i class="fas fa-users"></i>
+        </div>
+                    <div class="stat-content">
+                        <div class="stat-number-desktop">{{ members|length }}</div>
+                        <div class="stat-label-desktop">Total Members</div>
+        </div>
+    </div>
+</div>
+        </div>
+    </div>
+            
+    <!-- Global Action Buttons -->
+    {% if members %}
+    <div class="desktop-global-actions">
+        <button type="button" class="global-action-btn all-present-btn-desktop" onclick="markAllPresentDesktop()">
+            <i class="fas fa-check-double"></i>
+            All Present
+        </button>
+        <button type="button" class="global-action-btn all-absent-btn-desktop" onclick="markAllAbsentDesktop()">
+            <i class="fas fa-times-circle"></i>
+            All Absent
+        </button>
+    </div>
+    {% endif %}
+    
+    <!-- Desktop Members Grid -->
+    <div class="desktop-members-section">
+        <div class="section-header-desktop">
+            <h4 class="section-title-desktop">Member Attendance</h4>
+            <div class="section-subtitle">Mark members as present or absent, then click Submit</div>
+        </div>
+                
+        {% if members %}
+            <form id="attendanceFormDesktop">
+                <div class="desktop-members-grid">
+                    {% for member in members %}
+                    <div class="desktop-member-card" data-member-id="{{ member.id }}">
+                        <div class="member-header-desktop">
+                            <div class="member-avatar-desktop">
+                                <span class="avatar-text-desktop">{{ member.name[0].upper() }}</span>
+                            </div>
+                            <div class="member-info-desktop">
+                                <h5 class="member-name-desktop">{{ member.name }}</h5>
+                                <div class="member-details-desktop">
+                                    {% if member.phone_number %}
+                                    <div class="detail-item">
+                                        <i class="fas fa-phone"></i>
+                                        <span>{{ member.phone_number }}</span>
+                                    </div>
+                                    {% endif %}
+                                    {% if member.ministry %}
+                                    <div class="detail-item">
+                                        <i class="fas fa-church"></i>
+                                        <span>{{ member.ministry }}</span>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    
+                        <div class="member-actions-desktop">
+                            <div class="action-icons-desktop">
+                                <button type="button" 
+                                        class="icon-btn-desktop present-icon-btn-desktop {% if attendance_data[member.id].present %}active{% endif %}"
+                                        data-member-id="{{ member.id }}"
+                                        onclick="{% if can_mark_attendance %}markMemberPresentDesktop(this){% else %}showAttendanceLockedMessage(){% endif %}"
+                                        title="{% if can_mark_attendance %}Mark as Present{% else %}Attendance is locked{% endif %}"
+                                        {% if not can_mark_attendance %}disabled style="opacity: 0.5; cursor: not-allowed;"{% endif %}>
+                                    <i class="fas fa-check-circle"></i>
+                                </button>
+                                <button type="button" 
+                                        class="icon-btn-desktop absent-icon-btn-desktop {% if not attendance_data[member.id].present %}active{% endif %}"
+                                        data-member-id="{{ member.id }}"
+                                        onclick="{% if can_mark_attendance %}markMemberAbsentDesktop(this){% else %}showAttendanceLockedMessage(){% endif %}"
+                                        title="{% if can_mark_attendance %}Mark as Absent{% else %}Attendance is locked{% endif %}"
+                                        {% if not can_mark_attendance %}disabled style="opacity: 0.5; cursor: not-allowed;"{% endif %}>
+                                    <i class="fas fa-times-circle"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <input type="checkbox" 
+                               class="member-checkbox-desktop" 
+                               name="attendance" 
+                               value="{{ member.id }}"
+                               data-member-id="{{ member.id }}"
+                               style="display: none;"
+                               {% if attendance_data[member.id].present %}checked{% endif %}>
+                    </div>
+                    {% endfor %}
+                </div>
+            </form>
+        {% else %}
+            <div class="no-members-desktop">
+                <div class="no-members-icon">
+                    <i class="fas fa-users"></i>
+                </div>
+                <h4>No members found</h4>
+                <p>Add some members to mark attendance.</p>
+            </div>
+        {% endif %}
+    </div>
+    
+    <!-- Attendance Locked Warning -->
+    {% if not can_mark_attendance %}
+    <div class="desktop-submit-container">
+        <div class="alert alert-warning" style="margin: 20px 0; padding: 20px; border-radius: 10px; background: linear-gradient(135deg, #f39c12, #e67e22); color: white; border: none; box-shadow: 0 4px 15px rgba(243, 156, 18, 0.3);">
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <i class="fas fa-lock" style="font-size: 24px;"></i>
+                <div>
+                    <h5 style="margin: 0 0 5px 0; font-weight: 600;">Attendance Locked</h5>
+                    <p style="margin: 0; opacity: 0.95;">Attendance can only be marked until Wednesday. This week's attendance is now closed.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Submit Button -->
+    {% if members and can_mark_attendance %}
+    <div class="desktop-submit-container">
+        <button type="button" class="desktop-submit-btn" onclick="submitAttendanceDesktop()">
+            <i class="fas fa-check-circle"></i>
+            Submit Attendance
+        </button>
+    </div>
+    {% endif %}
+    
+    <!-- Confirmation Modal -->
+    <div id="confirmModalDesktop" class="confirm-modal-desktop" style="display: none;">
+        <div class="modal-overlay-desktop" onclick="closeConfirmModalDesktop()"></div>
+        <div class="modal-content-desktop">
+            <div class="modal-header-desktop">
+                <h3>Confirm Attendance</h3>
+            </div>
+            <div class="modal-body-desktop">
+                <p>Are you sure you want to submit the attendance for this meeting?</p>
+                <div class="attendance-summary-desktop">
+                    <div class="summary-item-desktop">
+                        <span class="summary-label-desktop">Present:</span>
+                        <span class="summary-value-desktop present-value-desktop" id="confirmPresentCountDesktop">0</span>
+                    </div>
+                    <div class="summary-item-desktop">
+                        <span class="summary-label-desktop">Absent:</span>
+                        <span class="summary-value-desktop absent-value-desktop" id="confirmAbsentCountDesktop">0</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer-desktop">
+                <button type="button" class="modal-btn-desktop cancel-btn-desktop" onclick="closeConfirmModalDesktop()">
+                    <i class="fas fa-times"></i>
+                    Cancel
+                </button>
+                <button type="button" class="modal-btn-desktop confirm-btn-desktop" onclick="confirmSubmitDesktop()">
+                    <i class="fas fa-check"></i>
+                    Yes, Submit
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Desktop CSS -->
+<style>
+.desktop-attendance-container {
+    padding: 2rem;
+    min-height: calc(100vh - 2rem);
+    background: #1a1a1a;
+}
+
+.desktop-header {
+    background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+    padding: 2rem;
+    border-radius: 20px;
+    margin-bottom: 2rem;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    border: 1px solid #34495e;
+}
+
+.desktop-stats-dashboard {
+    margin-bottom: 2rem;
+}
+
+.stat-card-desktop {
+    background: #2c3e50;
+    border-radius: 20px;
+    padding: 2rem;
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    border: 3px solid #34495e;
+    transition: all 0.3s ease;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+}
+
+.stat-card-desktop:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 40px rgba(0,0,0,0.4);
+}
+
+.stat-card-desktop.present {
+    border-color: #27ae60;
+    background: #2c3e50;
+}
+
+.stat-card-desktop.absent {
+    border-color: #e74c3c;
+    background: #2c3e50;
+}
+
+.stat-card-desktop.pending {
+    border-color: #f39c12;
+    background: #2c3e50;
+}
+
+.stat-card-desktop.total {
+    border-color: #3498db;
+    background: #2c3e50;
+}
+
+.stat-icon-desktop {
+    font-size: 3rem;
+    color: white;
+}
+
+.stat-content {
+    flex: 1;
+}
+
+.stat-number-desktop {
+    font-size: 2.5rem;
+    font-weight: bold;
+    color: white;
+    margin-bottom: 0.5rem;
+}
+
+.stat-label-desktop {
+    font-size: 1rem;
+    color: #bdc3c7;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 500;
+}
+
+.desktop-members-section {
+    background: #2c3e50;
+    border-radius: 20px;
+    padding: 2rem;
+    border: 1px solid #34495e;
+}
+
+.section-header-desktop {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.section-title-desktop {
+    color: white;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+}
+
+.section-subtitle {
+    color: #bdc3c7;
+    font-size: 1rem;
+}
+
+.desktop-members-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 1.5rem;
+}
+
+.desktop-member-card {
+    background: #34495e;
+    border-radius: 20px;
+    padding: 1.5rem;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+    transition: all 0.3s ease;
+    border: 3px solid #34495e;
+}
+
+.desktop-member-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 40px rgba(0,0,0,0.4);
+    border-color: #3498db;
+}
+
+.desktop-member-card.status-present {
+    border-color: #27ae60;
+    background: #34495e;
+    border-width: 3px;
+}
+
+.desktop-member-card.status-absent {
+    border-color: #e74c3c;
+    background: #34495e;
+    border-width: 3px;
+}
+
+.desktop-member-card.status-pending {
+    border-color: #f39c12;
+    background: #34495e;
+    border-width: 3px;
+}
+
+.member-header-desktop {
+    display: flex;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.member-avatar-desktop {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 1.5rem;
+    box-shadow: 0 8px 25px rgba(52, 152, 219, 0.3);
+}
+
+.avatar-text-desktop {
+    color: white;
+    font-weight: bold;
+    font-size: 1.8rem;
+}
+
+.member-info-desktop {
+    flex: 1;
+}
+
+.member-name-desktop {
+    color: white;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+}
+
+.member-details-desktop {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.detail-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    color: #bdc3c7;
+}
+
+.detail-item i {
+    color: #95a5a6;
+    width: 16px;
+}
+
+.member-actions-desktop {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Global Action Buttons */
+.desktop-global-actions {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    padding: 0 0.5rem;
+}
+
+.global-action-btn {
+    flex: 1;
+    padding: 1rem 2rem;
+    border: none;
+    border-radius: 12px;
+    color: white;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    transition: all 0.2s ease;
+    min-height: 50px;
+}
+
+.all-present-btn-desktop {
+    background: linear-gradient(135deg, #27ae60, #2ecc71);
+    box-shadow: 0 4px 16px rgba(39, 174, 96, 0.3);
+}
+
+.all-present-btn-desktop:hover {
+    background: linear-gradient(135deg, #2ecc71, #27ae60);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(39, 174, 96, 0.4);
+}
+
+.all-absent-btn-desktop {
+    background: linear-gradient(135deg, #e74c3c, #c0392b);
+    box-shadow: 0 4px 16px rgba(231, 76, 60, 0.3);
+}
+
+.all-absent-btn-desktop:hover {
+    background: linear-gradient(135deg, #c0392b, #e74c3c);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(231, 76, 60, 0.4);
+}
+
+/* Icon Buttons */
+.action-icons-desktop {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    justify-content: center;
+}
+
+.icon-btn-desktop {
+    width: 50px;
+    height: 50px;
+    border: 2px solid;
+    border-radius: 12px;
+    background: transparent;
+    color: #95a5a6;
+    font-size: 1.5rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    padding: 0;
+}
+
+.present-icon-btn-desktop {
+    border-color: #7f8c8d;
+    color: #7f8c8d;
+}
+
+.present-icon-btn-desktop:hover {
+    border-color: #27ae60;
+    color: #27ae60;
+    background: rgba(39, 174, 96, 0.1);
+}
+
+.present-icon-btn-desktop.active {
+    border-color: #27ae60;
+    color: #27ae60;
+    background: rgba(39, 174, 96, 0.15);
+}
+
+.absent-icon-btn-desktop {
+    border-color: #7f8c8d;
+    color: #7f8c8d;
+}
+
+.absent-icon-btn-desktop:hover {
+    border-color: #e74c3c;
+    color: #e74c3c;
+    background: rgba(231, 76, 60, 0.1);
+}
+
+.absent-icon-btn-desktop.active {
+    border-color: #e74c3c;
+    color: #e74c3c;
+    background: rgba(231, 76, 60, 0.15);
+}
+
+.icon-btn-desktop:active {
+    transform: scale(0.95);
+}
+
+/* Submit Button */
+.desktop-submit-container {
+    margin-top: 2rem;
+    padding: 1rem 0;
+    text-align: center;
+}
+
+.desktop-submit-btn {
+    padding: 1rem 3rem;
+    background: linear-gradient(135deg, #3498db, #2980b9);
+    border: none;
+    border-radius: 12px;
+    color: white;
+    font-size: 1.1rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    transition: all 0.2s ease;
+    box-shadow: 0 6px 20px rgba(52, 152, 219, 0.4);
+    min-height: 56px;
+}
+
+.desktop-submit-btn:hover {
+    background: linear-gradient(135deg, #2980b9, #3498db);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(52, 152, 219, 0.5);
+}
+
+.desktop-submit-btn:active {
+    transform: translateY(0);
+}
+
+.desktop-submit-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Confirmation Modal */
+.confirm-modal-desktop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+}
+
+.modal-overlay-desktop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+}
+
+.modal-content-desktop {
+    position: relative;
+    background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+    border: 1px solid #34495e;
+    border-radius: 20px;
+    width: 100%;
+    max-width: 500px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    animation: modalSlideInDesktop 0.3s ease;
+    z-index: 1;
+}
+
+@keyframes modalSlideInDesktop {
+    from {
+        transform: translateY(-20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.modal-header-desktop {
+    padding: 2rem 2rem 1.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.modal-header-desktop h3 {
+    color: white;
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0;
+}
+
+.modal-body-desktop {
+    padding: 2rem;
+}
+
+.modal-body-desktop p {
+    color: #ecf0f1;
+    font-size: 1.1rem;
+    margin: 0 0 1.5rem 0;
+    line-height: 1.5;
+}
+
+.attendance-summary-desktop {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.summary-item-desktop {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.summary-label-desktop {
+    color: #bdc3c7;
+    font-size: 1rem;
+    font-weight: 500;
+}
+
+.summary-value-desktop {
+    font-size: 1.3rem;
+    font-weight: 700;
+}
+
+.present-value-desktop {
+    color: #27ae60;
+}
+
+.absent-value-desktop {
+    color: #e74c3c;
+}
+
+.modal-footer-desktop {
+    padding: 1.5rem 2rem 2rem;
+    display: flex;
+    gap: 1rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.modal-btn-desktop {
+    flex: 1;
+    padding: 1rem 1.5rem;
+    border: none;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    transition: all 0.2s ease;
+    min-height: 50px;
+}
+
+.cancel-btn-desktop {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.cancel-btn-desktop:hover {
+    background: rgba(255, 255, 255, 0.15);
+    transform: scale(0.98);
+}
+
+.confirm-btn-desktop {
+    background: linear-gradient(135deg, #3498db, #2980b9);
+    color: white;
+    box-shadow: 0 4px 16px rgba(52, 152, 219, 0.3);
+}
+
+.confirm-btn-desktop:hover {
+    background: linear-gradient(135deg, #2980b9, #3498db);
+    transform: scale(0.98);
+}
+
+.confirm-btn-desktop:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+
+.no-members-desktop {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: #95a5a6;
+}
+
+.no-members-icon {
+    font-size: 4rem;
+    margin-bottom: 1.5rem;
+    color: #bdc3c7;
+}
+
+.no-members-desktop h4 {
+    color: #bdc3c7;
+    margin-bottom: 1rem;
+}
+
+.no-members-desktop p {
+    color: #95a5a6;
+    margin: 0;
+    font-size: 1.1rem;
+}
+</style>
+
+<!-- Desktop JavaScript -->
+<script>
+// Mark member as present
+window.markMemberPresentDesktop = function(buttonElement) {
+    try {
+        if (!buttonElement) {
+            console.error('Button element not provided');
+            return;
+        }
+        
+        const memberId = buttonElement.getAttribute('data-member-id');
+        if (!memberId) {
+            console.error('Member ID not found on button');
+            return;
+        }
+        
+        // Find the parent member card
+        const memberCard = buttonElement.closest('.desktop-member-card');
+        if (!memberCard) {
+            console.error('Member card not found');
+            return;
+        }
+        
+        const checkbox = memberCard.querySelector('.member-checkbox-desktop');
+        const presentBtn = memberCard.querySelector('.present-icon-btn-desktop');
+        const absentBtn = memberCard.querySelector('.absent-icon-btn-desktop');
+        
+        if (!checkbox || !presentBtn || !absentBtn) {
+            console.error('Required elements not found for member:', memberId);
+            return;
+        }
+        
+        checkbox.checked = true;
+        presentBtn.classList.add('active');
+        absentBtn.classList.remove('active');
+        
+        updateCountsDesktop();
+    } catch (error) {
+        console.error('Error in markMemberPresentDesktop:', error);
+    }
+}
+
+// Mark member as absent
+window.markMemberAbsentDesktop = function(buttonElement) {
+    try {
+        if (!buttonElement) {
+            console.error('Button element not provided');
+            return;
+        }
+        
+        const memberId = buttonElement.getAttribute('data-member-id');
+        if (!memberId) {
+            console.error('Member ID not found on button');
+            return;
+        }
+        
+        // Find the parent member card
+        const memberCard = buttonElement.closest('.desktop-member-card');
+        if (!memberCard) {
+            console.error('Member card not found');
+            return;
+        }
+        
+        const checkbox = memberCard.querySelector('.member-checkbox-desktop');
+        const presentBtn = memberCard.querySelector('.present-icon-btn-desktop');
+        const absentBtn = memberCard.querySelector('.absent-icon-btn-desktop');
+        
+        if (!checkbox || !presentBtn || !absentBtn) {
+            console.error('Required elements not found for member:', memberId);
+            return;
+        }
+        
+        checkbox.checked = false;
+        presentBtn.classList.remove('active');
+        absentBtn.classList.add('active');
+        
+        updateCountsDesktop();
+    } catch (error) {
+        console.error('Error in markMemberAbsentDesktop:', error);
+    }
+}
+
+// Mark all present
+window.markAllPresentDesktop = function() {
+    const checkboxes = document.querySelectorAll('.member-checkbox-desktop');
+    const presentButtons = document.querySelectorAll('.present-icon-btn-desktop');
+    const absentButtons = document.querySelectorAll('.absent-icon-btn-desktop');
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = true;
+    });
+    
+    presentButtons.forEach(btn => {
+        btn.classList.add('active');
+    });
+    
+    absentButtons.forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    updateCountsDesktop();
+}
+
+// Mark all absent
+window.markAllAbsentDesktop = function() {
+    const checkboxes = document.querySelectorAll('.member-checkbox-desktop');
+    const presentButtons = document.querySelectorAll('.present-icon-btn-desktop');
+    const absentButtons = document.querySelectorAll('.absent-icon-btn-desktop');
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = false;
+    });
+    
+    presentButtons.forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    absentButtons.forEach(btn => {
+        btn.classList.add('active');
+    });
+    
+    updateCountsDesktop();
+}
+
+// Update counts
+function updateCountsDesktop() {
+    const checkedBoxes = document.querySelectorAll('.member-checkbox-desktop:checked');
+    const presentCount = checkedBoxes.length;
+    const totalMembers = document.querySelectorAll('.member-checkbox-desktop').length;
+    const absentCount = totalMembers - presentCount;
+    
+    const presentCountEl = document.getElementById('presentCount-desktop');
+    const absentCountEl = document.getElementById('absentCount-desktop');
+    const pendingCountEl = document.getElementById('pendingCount-desktop');
+    
+    if (presentCountEl) presentCountEl.textContent = presentCount;
+    if (absentCountEl) absentCountEl.textContent = absentCount;
+    if (pendingCountEl) pendingCountEl.textContent = 0; // No pending with checkbox system
+}
+
+// Show confirmation modal
+window.submitAttendanceDesktop = function() {
+    {% if not can_mark_attendance %}
+    showAttendanceLockedMessage();
+    return;
+    {% endif %}
+    
+    const checkedBoxes = document.querySelectorAll('.member-checkbox-desktop:checked');
+    const presentCount = checkedBoxes.length;
+    const totalMembers = document.querySelectorAll('.member-checkbox-desktop').length;
+    const absentCount = totalMembers - presentCount;
+    
+    document.getElementById('confirmPresentCountDesktop').textContent = presentCount;
+    document.getElementById('confirmAbsentCountDesktop').textContent = absentCount;
+    
+    const modal = document.getElementById('confirmModalDesktop');
+    if (modal) {
+        modal.style.display = 'flex';
+    }
+}
+
+// Close confirmation modal
+window.closeConfirmModalDesktop = function() {
+    const modal = document.getElementById('confirmModalDesktop');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+// Show attendance locked message
+window.showAttendanceLockedMessage = function() {
+    alert('Attendance can only be marked until Wednesday. This week\'s attendance is now closed.');
+}
+
+// Confirm and submit attendance
+window.confirmSubmitDesktop = function() {
+    try {
+        const confirmBtn = document.querySelector('.confirm-btn-desktop');
+        const memberCheckboxes = document.querySelectorAll('.member-checkbox-desktop');
+        
+        if (!confirmBtn) {
+            console.error('Confirm button not found');
+            return;
+        }
+        
+        if (memberCheckboxes.length === 0) {
+            showFeedbackDesktop('No members found to submit', 'error');
+            return;
+        }
+        
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Submitting...</span>';
+        
+        const attendance = [];
+        memberCheckboxes.forEach(checkbox => {
+            const memberId = checkbox.getAttribute('data-member-id');
+            if (!memberId) {
+                console.warn('Checkbox missing member ID');
+                return;
+            }
+            const status = checkbox.checked ? 'present' : 'absent';
+            attendance.push({
+                member_id: memberId,
+                status: status
+            });
+        });
+        
+        if (attendance.length === 0) {
+            showFeedbackDesktop('No attendance data to submit', 'error');
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = '<i class="fas fa-check"></i><span>Yes, Submit</span>';
+            return;
+        }
+        
+        const meetingDate = '{{ meeting_date }}';
+        fetch(`/bulk_update_attendance/${encodeURIComponent(meetingDate)}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ attendance: attendance })
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => {
+                    throw new Error(data.message || 'Server error');
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                closeConfirmModalDesktop();
+                showFeedbackDesktop(data.message, 'success');
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
+            } else {
+                showFeedbackDesktop(data.message || 'Error submitting attendance', 'error');
+                confirmBtn.disabled = false;
+                confirmBtn.innerHTML = '<i class="fas fa-check"></i><span>Yes, Submit</span>';
+            }
+        })
+        .catch(error => {
+            console.error('Error submitting attendance:', error);
+            showFeedbackDesktop(error.message || 'Network error. Please try again.', 'error');
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = '<i class="fas fa-check"></i><span>Yes, Submit</span>';
+        });
+    } catch (error) {
+        console.error('Error in confirmSubmitDesktop:', error);
+        showFeedbackDesktop('An error occurred. Please try again.', 'error');
+        const confirmBtn = document.querySelector('.confirm-btn-desktop');
+        if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = '<i class="fas fa-check"></i><span>Yes, Submit</span>';
+        }
+    }
+}
+
+function showFeedbackDesktop(message, type) {
+    const toast = document.createElement('div');
+    toast.className = `toast-desktop ${type}`;
+    toast.innerHTML = `
+        <div class="toast-content-desktop">
+            <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i>
+            <span>${message}</span>
+        </div>
+    `;
+    
+    document.body.appendChild(toast);
+    
+    setTimeout(() => toast.classList.add('show'), 100);
+    
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => {
+            if (document.body.contains(toast)) {
+                document.body.removeChild(toast);
+            }
+        }, 300);
+    }, 3000);
+}
+
+// Initialize desktop attendance
+document.addEventListener('DOMContentLoaded', function() {
+    updateCountsDesktop();
+});
+</script>
+
+<!-- Desktop Toast Styles -->
+<style>
+.toast-desktop {
+    position: fixed;
+    top: 30px;
+    right: 30px;
+    background: #2c3e50;
+    color: white;
+    padding: 1.5rem 2rem;
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    z-index: 9999;
+    transform: translateX(400px);
+    transition: all 0.3s ease;
+    border: 1px solid #34495e;
+}
+
+.toast-desktop.show {
+    transform: translateX(0);
+}
+
+.toast-desktop.success {
+    background: linear-gradient(135deg, #27ae60, #2ecc71);
+    border-color: #27ae60;
+}
+
+.toast-desktop.error {
+    background: linear-gradient(135deg, #e74c3c, #c0392b);
+    border-color: #e74c3c;
+}
+
+.toast-content-desktop {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 1rem;
+}
+
+.toast-content-desktop i {
+    font-size: 1.3rem;
+}
+</style>
+{% endblock %}

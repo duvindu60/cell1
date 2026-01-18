@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+{% block title %}Login - CellApp{% endblock %}
+{% block body_class %}login-page{% endblock %}
+
+{% block mobile_content %}
+{% endblock %}
+
+{% block desktop_content %}
+<div class="row justify-content-center h-100">
+    <div class="col-12 col-md-8 col-lg-6 col-xl-5 d-flex align-items-center justify-content-center">
+        <div class="w-100">
+            <div class="text-center mb-5">
+                <div class="feature-icon mx-auto mb-4" style="width: 100px; height: 100px; font-size: 40px;">
+                    <i class="fas fa-mobile-alt"></i>
+                </div>
+                <h1 class="h1 mb-3" style="font-size: 2.5rem;">Sign In</h1>
+                <p class="text-muted" style="font-size: 1.2rem;">Enter your mobile number and password</p>
+            </div>
+            
+            <div class="content-card" style="padding: 4rem 3rem; min-height: 60vh;">
+                <form method="POST" id="loginForm">
+                    <div class="mb-5">
+                        <label for="mobile" class="form-label" style="font-size: 1.2rem; font-weight: 600;">Mobile Number</label>
+                        <div class="input-group">
+                            <span class="input-group-text" style="padding: 1rem;">
+                                <i class="fas fa-mobile-alt"></i>
+                            </span>
+                            <input type="tel" class="form-control" id="mobile" name="mobile" 
+                                   placeholder="Enter your mobile number" required 
+                                   autocomplete="username"
+                                   style="padding: 1rem; font-size: 1.1rem;">
+                        </div>
+                        <small class="text-muted" style="font-size: 1rem;">Enter your 10-digit mobile number</small>
+                    </div>
+                    
+                    <div class="mb-5">
+                        <label for="password" class="form-label" style="font-size: 1.2rem; font-weight: 600;">Password</label>
+                        <div class="input-group">
+                            <span class="input-group-text" style="padding: 1rem;">
+                                <i class="fas fa-lock"></i>
+                            </span>
+                            <input type="password" class="form-control" id="password" name="password" 
+                                   placeholder="Enter your password" required 
+                                   autocomplete="current-password"
+                                   style="padding: 1rem; font-size: 1.1rem;">
+                        </div>
+                        <small class="text-muted" style="font-size: 1rem;">Enter your password (use 123456 for testing)</small>
+                    </div>
+                    
+                    <div class="d-grid mt-4">
+                        <button type="submit" class="btn btn-primary" id="submitBtn" 
+                                style="padding: 1.2rem; font-size: 1.3rem; font-weight: 600;">
+                            <i class="fas fa-sign-in-alt me-2"></i>Sign In
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block mobile_nav %}
+{% endblock %}
+
+{% block desktop_nav %}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Desktop Login Page Styling */
+
+/* Large Desktop (1400px+) */
+@media (min-width: 1400px) {
+    .login-page .desktop-box-container {
+        max-width: 1800px;
+        min-height: calc(100vh - 40px);
+    }
+    
+    .content-card {
+        padding: 5rem 4rem;
+        min-height: 70vh;
+    }
+    
+    .feature-icon {
+        width: 120px;
+        height: 120px;
+        font-size: 50px;
+    }
+    
+    h1 {
+        font-size: 3rem;
+    }
+    
+    .text-muted {
+        font-size: 1.4rem;
+    }
+    
+    .form-label {
+        font-size: 1.4rem;
+    }
+    
+    .form-control {
+        padding: 1.25rem;
+        font-size: 1.2rem;
+    }
+    
+    .input-group-text {
+        padding: 1.25rem;
+    }
+    
+    .btn {
+        padding: 1.4rem;
+        font-size: 1.4rem;
+    }
+}
+
+/* Desktop (1200px - 1399px) */
+@media (min-width: 1200px) and (max-width: 1399px) {
+    .login-page .desktop-box-container {
+        max-width: 1600px;
+    }
+    
+    .content-card {
+        padding: 4rem 3rem;
+        min-height: 65vh;
+    }
+    
+    .feature-icon {
+        width: 100px;
+        height: 100px;
+        font-size: 40px;
+    }
+    
+    h1 {
+        font-size: 2.5rem;
+    }
+    
+    .text-muted {
+        font-size: 1.2rem;
+    }
+}
+
+/* Large Tablet (992px - 1199px) */
+@media (min-width: 992px) and (max-width: 1199px) {
+    .login-page .desktop-box-container {
+        max-width: 1200px;
+        margin: 0 1rem;
+    }
+    
+    .content-card {
+        padding: 3rem 2rem;
+        min-height: 60vh;
+    }
+    
+    .feature-icon {
+        width: 80px;
+        height: 80px;
+        font-size: 32px;
+    }
+    
+    h1 {
+        font-size: 2.2rem;
+    }
+    
+    .text-muted {
+        font-size: 1.1rem;
+    }
+    
+    .form-label {
+        font-size: 1.1rem;
+    }
+    
+    .form-control {
+        padding: 1rem;
+        font-size: 1.1rem;
+    }
+    
+    .input-group-text {
+        padding: 1rem;
+    }
+    
+    .btn {
+        padding: 1.2rem;
+        font-size: 1.2rem;
+    }
+}
+
+/* Tablet (768px - 991px) */
+@media (min-width: 768px) and (max-width: 991px) {
+    .login-page .desktop-box-container {
+        max-width: 100%;
+        margin: 0 0.5rem;
+        min-height: calc(100vh - 60px);
+    }
+    
+    .desktop-box-content {
+        padding: 1rem;
+    }
+    
+    .content-card {
+        padding: 2rem 1.5rem;
+        min-height: 55vh;
+    }
+    
+    .feature-icon {
+        width: 70px;
+        height: 70px;
+        font-size: 28px;
+    }
+    
+    h1 {
+        font-size: 2rem;
+    }
+    
+    .text-muted {
+        font-size: 1rem;
+    }
+    
+    .form-label {
+        font-size: 1rem;
+    }
+    
+    .form-control {
+        padding: 0.875rem;
+        font-size: 1rem;
+    }
+    
+    .input-group-text {
+        padding: 0.875rem;
+    }
+    
+    .btn {
+        padding: 1rem;
+        font-size: 1.1rem;
+    }
+}
+</style>
+{% endblock %}

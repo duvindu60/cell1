@@ -1,0 +1,74 @@
+{# Simple Component Macros for CellApp #}
+
+{# Page Header Macro #}
+{% macro page_header(icon, title, subtitle) %}
+<div class="text-center mb-4">
+    <div class="feature-icon mx-auto mb-3">
+        <i class="{{ icon }}"></i>
+    </div>
+    <h2>{{ title }}</h2>
+    <p>{{ subtitle }}</p>
+</div>
+{% endmacro %}
+
+{# Feature Card Macro #}
+{% macro feature_card(icon, title, content, link=None) %}
+<div class="feature-card text-center">
+    {% if link %}
+    <a href="{{ link }}" class="text-decoration-none text-reset">
+    {% endif %}
+        <div class="feature-icon">
+            <i class="{{ icon }}"></i>
+        </div>
+        <h2>{{ title }}</h2>
+        <p>{{ content }}</p>
+    {% if link %}
+    </a>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{# Content Card Macro #}
+{% macro content_card(title, content, icon=None) %}
+<div class="content-card">
+    {% if icon %}
+    <div class="d-flex align-items-center mb-3">
+        <div class="feature-icon me-3">
+            <i class="{{ icon }}"></i>
+        </div>
+        <div>
+            <h2>{{ title }}</h2>
+        </div>
+    </div>
+    {% else %}
+    <h2>{{ title }}</h2>
+    {% endif %}
+    {{ content }}
+</div>
+{% endmacro %}
+
+{# Button Macro #}
+{% macro button(text, type='button', class='btn-primary', icon=None) %}
+<button type="{{ type }}" class="btn {{ class }}">
+    {% if icon %}
+    <i class="{{ icon }} me-2"></i>
+    {% endif %}
+    {{ text }}
+</button>
+{% endmacro %}
+
+{# Form Group Macro #}
+{% macro form_group(label, input_type, name, placeholder, required=false, icon=None) %}
+<div class="mb-3">
+    <label for="{{ name }}" class="form-label">{{ label }}</label>
+    <div class="input-group">
+        {% if icon %}
+        <span class="input-group-text">
+            <i class="{{ icon }}"></i>
+        </span>
+        {% endif %}
+        <input type="{{ input_type }}" class="form-control" id="{{ name }}" name="{{ name }}" 
+               placeholder="{{ placeholder }}" {{ 'required' if required else '' }}>
+    </div>
+</div>
+{% endmacro %}

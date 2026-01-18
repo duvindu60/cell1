@@ -1,0 +1,431 @@
+{% extends "base.html" %}
+{% import 'macros/components.html' as components %}
+
+{% block title %}Add New Member{% endblock %}
+
+<!-- Reusable Form Partial -->
+{% macro render_member_form(is_mobile=false) %}
+        <form id="memberForm" action="{{ url_for('main.update_member', member_id=member.id) if member and member.id else url_for('main.add_member') }}" method="POST" novalidate>
+            <!-- Hidden fields for auto-generated data -->
+            <input type="hidden" name="leader_id" value="{{ session.user.id if session.user else '' }}">
+            
+            <!-- Full Name - Required Field -->
+    <div style="margin-bottom: {{ '20px' if is_mobile else '24px' }};">
+        <label for="name" style="display: block; color: #B1BAC4; font-weight: 600; margin-bottom: {{ '10px' if is_mobile else '12px' }}; font-size: {{ '16px' if is_mobile else '16px' }}; line-height: 1.4;">
+                    <i class="fas fa-user" style="margin-right: 8px; color: #1F6FEB;"></i>Full Name <span style="color: #F85149;">*</span>
+                </label>
+                <input type="text" 
+                       id="name" 
+                       name="name" 
+                       required 
+                       placeholder="Enter full name" 
+                       maxlength="100" 
+                       pattern="[A-Za-z\s]{2,100}" 
+                       title="Name must be 2-100 characters, letters and spaces only"
+                       value="{{ request.form.name if request.form.name else (member.name if member and member.name else '') }}"
+               style="width: 100%; padding: {{ '14px 18px' if is_mobile else '16px 20px' }}; border: 2px solid #30363D; border-radius: {{ '12px' if is_mobile else '10px' }}; background: #0D1117; color: #B1BAC4; font-size: {{ '16px' if is_mobile else '16px' }}; transition: all 0.3s ease; box-sizing: border-box; min-height: {{ '52px' if is_mobile else '48px' }};"
+                       onfocus="this.style.borderColor='#1F6FEB'; this.style.background='#161B22'; this.style.boxShadow='0 0 0 3px rgba(31, 111, 235, 0.1)';"
+                       onblur="this.style.borderColor='#30363D'; this.style.background='#0D1117'; this.style.boxShadow='none';">
+        <div style="color: #6E7681; font-size: {{ '14px' if is_mobile else '14px' }}; margin-top: {{ '8px' if is_mobile else '8px' }}; font-weight: 500;">Required field - 2-100 characters, letters and spaces only</div>
+                {% if form_errors and 'name' in form_errors %}
+            <div style="color: #F85149; font-size: {{ '14px' if is_mobile else '14px' }}; margin-top: {{ '6px' if is_mobile else '8px' }}; font-weight: 500;">{{ form_errors.name }}</div>
+                {% endif %}
+            </div>
+            
+    <!-- Age - Optional Field -->
+    <div style="margin-bottom: {{ '12px' if is_mobile else '16px' }};">
+        <label for="age" style="display: block; color: #B1BAC4; font-weight: 600; margin-bottom: {{ '6px' if is_mobile else '8px' }}; font-size: {{ '15px' if is_mobile else '16px' }};">
+            <i class="fas fa-calendar" style="margin-right: 8px; color: #1F6FEB;"></i>Age
+                    </label>
+                    <input type="number" 
+                           id="age" 
+                           name="age" 
+               placeholder="Enter age" 
+                           min="1" 
+                           max="120" 
+                           value="{{ request.form.age if request.form.age else (member.age if member and member.age else '') }}"
+               style="width: 100%; padding: {{ '10px 14px' if is_mobile else '12px 16px' }}; border: 2px solid #30363D; border-radius: 8px; background: #0D1117; color: #B1BAC4; font-size: {{ '15px' if is_mobile else '16px' }}; transition: all 0.3s ease; box-sizing: border-box;"
+                           onfocus="this.style.borderColor='#1F6FEB'; this.style.background='#161B22';"
+                           onblur="this.style.borderColor='#30363D'; this.style.background='#0D1117';">
+        <div style="color: #6E7681; font-size: {{ '12px' if is_mobile else '14px' }}; margin-top: {{ '3px' if is_mobile else '4px' }};">Optional - Age between 1-120</div>
+                    {% if form_errors and 'age' in form_errors %}
+            <div style="color: #F85149; font-size: {{ '12px' if is_mobile else '14px' }}; margin-top: {{ '3px' if is_mobile else '4px' }};">{{ form_errors.age }}</div>
+                    {% endif %}
+                </div>
+
+    <!-- Gender - Optional Field -->
+    <div style="margin-bottom: {{ '12px' if is_mobile else '16px' }};">
+        <label for="gender" style="display: block; color: #B1BAC4; font-weight: 600; margin-bottom: {{ '6px' if is_mobile else '8px' }}; font-size: {{ '15px' if is_mobile else '16px' }};">
+                        <i class="fas fa-venus-mars" style="margin-right: 8px; color: #1F6FEB;"></i>Gender
+                    </label>
+        <select id="gender" 
+                name="gender" 
+                style="width: 100%; padding: {{ '10px 14px' if is_mobile else '12px 16px' }}; border: 2px solid #30363D; border-radius: 8px; background: #0D1117; color: #B1BAC4; font-size: {{ '15px' if is_mobile else '16px' }}; transition: all 0.3s ease; box-sizing: border-box;"
+                            onfocus="this.style.borderColor='#1F6FEB'; this.style.background='#161B22';"
+                            onblur="this.style.borderColor='#30363D'; this.style.background='#0D1117';">
+            <option value="">Select gender</option>
+            <option value="Male" {{ 'selected' if request.form.gender == 'Male' or (member and member.gender == 'Male') else '' }}>Male</option>
+            <option value="Female" {{ 'selected' if request.form.gender == 'Female' or (member and member.gender == 'Female') else '' }}>Female</option>
+            <option value="Other" {{ 'selected' if request.form.gender == 'Other' or (member and member.gender == 'Other') else '' }}>Other</option>
+                    </select>
+        <div style="color: #6E7681; font-size: {{ '12px' if is_mobile else '14px' }}; margin-top: {{ '3px' if is_mobile else '4px' }};">Optional - Select gender</div>
+            </div>
+            
+    <!-- Phone Number - Optional Field -->
+    <div style="margin-bottom: {{ '12px' if is_mobile else '16px' }};">
+        <label for="phone_number" style="display: block; color: #B1BAC4; font-weight: 600; margin-bottom: {{ '6px' if is_mobile else '8px' }}; font-size: {{ '15px' if is_mobile else '16px' }};">
+                    <i class="fas fa-phone" style="margin-right: 8px; color: #1F6FEB;"></i>Phone Number
+                </label>
+                <input type="tel" 
+                       id="phone_number" 
+                       name="phone_number" 
+               placeholder="Enter phone number" 
+                       pattern="[0-9]{10,15}" 
+                       title="Phone number must be 10-15 digits"
+                       value="{{ request.form.phone_number if request.form.phone_number else (member.phone_number if member and member.phone_number else '') }}"
+               style="width: 100%; padding: {{ '10px 14px' if is_mobile else '12px 16px' }}; border: 2px solid #30363D; border-radius: 8px; background: #0D1117; color: #B1BAC4; font-size: {{ '15px' if is_mobile else '16px' }}; transition: all 0.3s ease; box-sizing: border-box;"
+                       onfocus="this.style.borderColor='#1F6FEB'; this.style.background='#161B22';"
+                       onblur="this.style.borderColor='#30363D'; this.style.background='#0D1117';">
+        <div style="color: #6E7681; font-size: {{ '12px' if is_mobile else '14px' }}; margin-top: {{ '3px' if is_mobile else '4px' }};">Optional - 10-15 digits only</div>
+                {% if form_errors and 'phone_number' in form_errors %}
+            <div style="color: #F85149; font-size: {{ '12px' if is_mobile else '14px' }}; margin-top: {{ '3px' if is_mobile else '4px' }};">{{ form_errors.phone_number }}</div>
+                {% endif %}
+            </div>
+            
+    <!-- Zone - Optional Field -->
+    <div style="margin-bottom: {{ '12px' if is_mobile else '16px' }};">
+        <label for="zone" style="display: block; color: #B1BAC4; font-weight: 600; margin-bottom: {{ '6px' if is_mobile else '8px' }}; font-size: {{ '15px' if is_mobile else '16px' }};">
+                        <i class="fas fa-map-marker-alt" style="margin-right: 8px; color: #1F6FEB;"></i>Zone
+                    </label>
+        <select id="zone" 
+                name="zone" 
+                style="width: 100%; padding: {{ '10px 14px' if is_mobile else '12px 16px' }}; border: 2px solid #30363D; border-radius: 8px; background: #0D1117; color: #B1BAC4; font-size: {{ '15px' if is_mobile else '16px' }}; transition: all 0.3s ease; box-sizing: border-box;"
+                            onfocus="this.style.borderColor='#1F6FEB'; this.style.background='#161B22';"
+                            onblur="this.style.borderColor='#30363D'; this.style.background='#0D1117';">
+            <option value="">Select zone</option>
+            <option value="Zone A" {{ 'selected' if request.form.zone == 'Zone A' or (member and member.zone == 'Zone A') else '' }}>Zone A</option>
+            <option value="Zone B" {{ 'selected' if request.form.zone == 'Zone B' or (member and member.zone == 'Zone B') else '' }}>Zone B</option>
+            <option value="Zone C" {{ 'selected' if request.form.zone == 'Zone C' or (member and member.zone == 'Zone C') else '' }}>Zone C</option>
+            <option value="Zone D" {{ 'selected' if request.form.zone == 'Zone D' or (member and member.zone == 'Zone D') else '' }}>Zone D</option>
+                    </select>
+        <div style="color: #6E7681; font-size: {{ '12px' if is_mobile else '14px' }}; margin-top: {{ '3px' if is_mobile else '4px' }};">Optional - Select zone</div>
+            </div>
+
+    <!-- Country - Autofilled from Leader -->
+    <div style="margin-bottom: {{ '12px' if is_mobile else '16px' }};">
+        <label for="country" style="display: block; color: #B1BAC4; font-weight: 600; margin-bottom: {{ '6px' if is_mobile else '8px' }}; font-size: {{ '15px' if is_mobile else '16px' }};">
+            <i class="fas fa-globe" style="margin-right: 8px; color: #1F6FEB;"></i>Country
+        </label>
+        <input type="text" 
+               id="country" 
+               name="country" 
+               readonly
+               value="{{ leader_country if leader_country else (member.country if member and member.country else '') }}"
+               style="width: 100%; padding: {{ '10px 14px' if is_mobile else '12px 16px' }}; border: 2px solid #30363D; border-radius: 8px; background: #161B22; color: #8B949E; font-size: {{ '15px' if is_mobile else '16px' }}; transition: all 0.3s ease; box-sizing: border-box; cursor: not-allowed;"
+               placeholder="Auto-filled from leader">
+        <div style="color: #6E7681; font-size: {{ '12px' if is_mobile else '14px' }}; margin-top: {{ '3px' if is_mobile else '4px' }};">Auto-filled from leader's information</div>
+    </div>
+
+    <!-- Branch ID - Autofilled from Leader -->
+    <div style="margin-bottom: {{ '12px' if is_mobile else '16px' }};">
+        <label for="branch_id" style="display: block; color: #B1BAC4; font-weight: 600; margin-bottom: {{ '6px' if is_mobile else '8px' }}; font-size: {{ '15px' if is_mobile else '16px' }};">
+            <i class="fas fa-building" style="margin-right: 8px; color: #1F6FEB;"></i>Branch ID
+        </label>
+        <input type="text" 
+               id="branch_id" 
+               name="branch_id" 
+               readonly
+               value="{{ leader_branch_id if leader_branch_id else (member.branch_id if member and member.branch_id else '') }}"
+               style="width: 100%; padding: {{ '10px 14px' if is_mobile else '12px 16px' }}; border: 2px solid #30363D; border-radius: 8px; background: #161B22; color: #8B949E; font-size: {{ '15px' if is_mobile else '16px' }}; transition: all 0.3s ease; box-sizing: border-box; cursor: not-allowed;"
+               placeholder="Auto-filled from leader">
+        <div style="color: #6E7681; font-size: {{ '12px' if is_mobile else '14px' }}; margin-top: {{ '3px' if is_mobile else '4px' }};">Auto-filled from leader's information</div>
+    </div>
+
+    <!-- Cell Category - Required Field -->
+    <div style="margin-bottom: {{ '12px' if is_mobile else '16px' }};">
+        <label for="cell_category" style="display: block; color: #B1BAC4; font-weight: 600; margin-bottom: {{ '6px' if is_mobile else '8px' }}; font-size: {{ '15px' if is_mobile else '16px' }};">
+            <i class="fas fa-users" style="margin-right: 8px; color: #1F6FEB;"></i>Cell Category
+        </label>
+        <select id="cell_category" 
+                name="cell_category" 
+                style="width: 100%; padding: {{ '10px 14px' if is_mobile else '12px 16px' }}; border: 2px solid #30363D; border-radius: 8px; background: #0D1117; color: #B1BAC4; font-size: {{ '15px' if is_mobile else '16px' }}; transition: all 0.3s ease; box-sizing: border-box;"
+                onfocus="this.style.borderColor='#1F6FEB'; this.style.background='#161B22';"
+                onblur="this.style.borderColor='#30363D'; this.style.background='#0D1117';">
+            <option value="">Select cell category</option>
+            <option value="youth" {{ 'selected' if request.form.cell_category == 'youth' or (member and member.cell_category == 'youth') else '' }}>Youth</option>
+            <option value="young adult" {{ 'selected' if request.form.cell_category == 'young adult' or (member and member.cell_category == 'young adult') else '' }}>Young Adult</option>
+        </select>
+        <div style="color: #6E7681; font-size: {{ '12px' if is_mobile else '14px' }}; margin-top: {{ '3px' if is_mobile else '4px' }};">Select cell category</div>
+    </div>
+
+    <!-- Church - Boolean Checkbox -->
+    <div style="margin-bottom: {{ '12px' if is_mobile else '16px' }};">
+        <label style="display: flex; align-items: center; color: #B1BAC4; font-weight: 600; font-size: {{ '15px' if is_mobile else '16px' }}; cursor: pointer;">
+            <input type="checkbox" 
+                   id="church" 
+                   name="church" 
+                   value="true"
+                   {{ 'checked' if request.form.church == 'true' or (member and member.church == True) else '' }}
+                   style="width: 20px; height: 20px; margin-right: 12px; cursor: pointer; accent-color: #1F6FEB;">
+            <i class="fas fa-church" style="margin-right: 8px; color: #1F6FEB;"></i>Church Member
+        </label>
+        <div style="color: #6E7681; font-size: {{ '12px' if is_mobile else '14px' }}; margin-top: {{ '3px' if is_mobile else '4px' }}; margin-left: 32px;">Check if member is part of the church</div>
+    </div>
+            
+            <!-- Form Actions -->
+    <div style="display: flex; gap: {{ '16px' if is_mobile else '20px' }}; justify-content: {{ 'stretch' if is_mobile else 'flex-end' }}; padding-top: {{ '20px' if is_mobile else '24px' }}; border-top: 1px solid #30363D;">
+                <a href="{{ url_for('main.members') }}" 
+                   style="padding: {{ '16px 24px' if is_mobile else '14px 28px' }}; border: 2px solid #30363D; border-radius: {{ '12px' if is_mobile else '10px' }}; background: transparent; color: #B1BAC4; font-size: {{ '16px' if is_mobile else '16px' }}; font-weight: 600; text-decoration: none; transition: all 0.3s ease; min-height: {{ '52px' if is_mobile else '48px' }}; display: flex; align-items: center; justify-content: center; flex: {{ '1' if is_mobile else 'auto' }};"
+                   onmouseover="this.style.background='#161B22'; this.style.borderColor='#6E7681'; this.style.transform='translateY(-2px)';"
+                   onmouseout="this.style.background='transparent'; this.style.borderColor='#30363D'; this.style.transform='translateY(0)';">
+                    <i class="fas fa-times" style="margin-right: 8px;"></i>Cancel
+                </a>
+                <button type="submit" 
+                        id="submitBtn"
+                        style="padding: {{ '16px 24px' if is_mobile else '14px 28px' }}; border: 2px solid #1F6FEB; border-radius: {{ '12px' if is_mobile else '10px' }}; background: #1F6FEB; color: white; font-size: {{ '16px' if is_mobile else '16px' }}; font-weight: 600; cursor: pointer; transition: all 0.3s ease; min-height: {{ '52px' if is_mobile else '48px' }}; display: flex; align-items: center; justify-content: center; flex: {{ '1' if is_mobile else 'auto' }};"
+                        onmouseover="this.style.background='#2c7bb6'; this.style.borderColor='#2c7bb6'; this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(31, 111, 235, 0.3)';"
+                        onmouseout="this.style.background='#1F6FEB'; this.style.borderColor='#1F6FEB'; this.style.transform='translateY(0)'; this.style.boxShadow='none';">
+                    <i class="fas fa-{{ 'save' if member and member.id else 'plus' }}" style="margin-right: 8px;"></i>{{ 'Update Member' if member and member.id else 'Add Member' }}
+                </button>
+            </div>
+            </form>
+{% endmacro %}
+
+{% block mobile_content %}
+{% endblock %}
+
+{% block desktop_content %}
+<!-- Desktop Form Wrapper -->
+<div class="text-center mb-5">
+    <div class="feature-icon mx-auto mb-4" style="width: 80px; height: 80px; font-size: 32px; background: linear-gradient(135deg, #1F6FEB, #2c7bb6); color: white; border-radius: 20px; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 32px rgba(31, 111, 235, 0.3);">
+        <i class="fas fa-user-plus"></i>
+    </div>
+    <h2 class="page-title" style="font-size: 2.5rem; font-weight: 700; color: var(--text-primary); margin-bottom: 12px;">{{ 'Edit Member' if member and member.id else 'Add New Member' }}</h2>
+    <p class="page-subtitle" style="font-size: 1.2rem; color: var(--text-secondary);">{{ 'Update member information' if member and member.id else 'Register a new cell group member' }}</p>
+</div>
+
+<div class="feature-card" style="background: #161B22; border: 1px solid #30363D; border-radius: 12px; padding: 30px; margin: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+    <div style="max-width: 600px; margin: 0 auto;">
+        {{ render_member_form(is_mobile=false) }}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Member Form Page Container */
+.member-form-page {
+    padding: 1rem;
+    padding-bottom: 6rem; /* Add extra padding to prevent content from being cut off by fixed bottom nav */
+    min-height: 100vh;
+    background: #0f172a;
+}
+
+/* Form Styling for Dark Theme */
+.form-label {
+    color: var(--text-dark) !important;
+    font-weight: 600;
+    margin-bottom: 8px;
+    display: block;
+}
+
+.form-control, .form-select {
+    background-color: var(--bg-card) !important;
+    border: 2px solid var(--border-color) !important;
+    color: var(--text-dark) !important;
+    border-radius: 8px !important;
+    padding: 12px 16px !important;
+    transition: all 0.3s ease !important;
+}
+
+.form-control:focus, .form-select:focus {
+    background-color: var(--bg-hover) !important;
+    border-color: var(--accent-color) !important;
+    color: var(--text-dark) !important;
+    box-shadow: 0 0 0 0.2rem rgba(31, 111, 235, 0.25) !important;
+}
+
+.form-control::placeholder {
+    color: var(--text-muted) !important;
+}
+
+.form-text {
+    color: var(--text-muted) !important;
+    font-size: 0.875rem;
+    margin-top: 4px;
+}
+
+.text-danger {
+    color: #F85149 !important;
+}
+
+.btn-primary {
+    background-color: var(--accent-color) !important;
+    border-color: var(--accent-color) !important;
+    color: white !important;
+    font-weight: 600;
+    padding: 12px 24px;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+.btn-primary:hover {
+    background-color: #2c7bb6 !important;
+    border-color: #2c7bb6 !important;
+    transform: translateY(-1px);
+}
+
+.btn-outline-secondary {
+    color: var(--text-dark) !important;
+    border-color: var(--border-color) !important;
+    background-color: transparent !important;
+    font-weight: 600;
+    padding: 12px 24px;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+.btn-outline-secondary:hover {
+    background-color: var(--bg-hover) !important;
+    border-color: var(--border-light) !important;
+    color: var(--text-dark) !important;
+}
+
+.breadcrumb {
+    background-color: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+.breadcrumb-item a {
+    color: var(--accent-color) !important;
+    text-decoration: none;
+}
+
+.breadcrumb-item.active {
+    color: var(--text-muted) !important;
+}
+
+.breadcrumb-item + .breadcrumb-item::before {
+    color: var(--text-muted) !important;
+}
+
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('memberForm');
+    const submitBtn = document.getElementById('submitBtn');
+    
+    // Auto-format phone number
+    const phoneInput = document.getElementById('phone_number');
+    if (phoneInput) {
+        phoneInput.addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value.length > 15) {
+                value = value.substring(0, 15);
+            }
+            e.target.value = value;
+        });
+    }
+    
+    // Form submission with loading state
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            const name = document.getElementById('name').value.trim();
+            const age = document.getElementById('age').value;
+            const phone = document.getElementById('phone_number').value;
+            
+            // Validate required fields
+            if (!name) {
+                e.preventDefault();
+                alert('Please enter the member\'s full name.');
+                document.getElementById('name').focus();
+                return;
+            }
+            
+            // Validate name pattern
+            if (!/^[A-Za-z\s]{2,100}$/.test(name)) {
+                e.preventDefault();
+                alert('Name must be 2-100 characters and contain only letters and spaces.');
+                document.getElementById('name').focus();
+                return;
+            }
+            
+            // Validate age if provided
+            if (age && (age < 1 || age > 120)) {
+                e.preventDefault();
+                alert('Please enter a valid age between 1 and 120.');
+                document.getElementById('age').focus();
+                return;
+            }
+            
+            // Validate phone if provided
+            if (phone && !/^[0-9]{10,15}$/.test(phone)) {
+                e.preventDefault();
+                alert('Please enter a valid phone number (10-15 digits).');
+                document.getElementById('phone_number').focus();
+                return;
+            }
+            
+            // Show loading state with better UX
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Adding...';
+            submitBtn.disabled = true;
+            
+            // Add visual feedback
+            submitBtn.style.opacity = '0.7';
+            
+            // Re-enable button after 15 seconds (in case of error)
+            setTimeout(() => {
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+                submitBtn.style.opacity = '1';
+            }, 15000);
+        });
+    }
+});
+
+</script>
+
+{% endblock %}
+
+{% block mobile_nav %}
+<a href="{{ url_for('main.index') }}" class="nav-link active">
+    <i class="fas fa-home"></i>
+    <span>Home</span>
+</a>
+<a href="{{ url_for('main.members') }}" class="nav-link">
+    <i class="fas fa-users"></i>
+    <span>Members</span>
+</a>
+<a href="{{ url_for('main.profile') }}" class="nav-link">
+    <i class="fas fa-user"></i>
+    <span>Profile</span>
+</a>
+<a href="{{ url_for('auth.logout') }}" class="nav-link">
+    <i class="fas fa-sign-out-alt"></i>
+    <span>Logout</span>
+</a>
+{% endblock %}
+
+{% block desktop_nav %}
+<a href="{{ url_for('main.index') }}" class="nav-link active">
+    <i class="fas fa-home"></i>
+    <span>Home</span>
+</a>
+<a href="{{ url_for('main.members') }}" class="nav-link">
+    <i class="fas fa-users"></i>
+    <span>Members</span>
+</a>
+<a href="{{ url_for('main.profile') }}" class="nav-link">
+    <i class="fas fa-user"></i>
+    <span>Profile</span>
+</a>
+<a href="{{ url_for('auth.logout') }}" class="nav-link">
+    <i class="fas fa-sign-out-alt"></i>
+    <span>Logout</span>
+</a>
+{% endblock %}

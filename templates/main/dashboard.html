@@ -1,0 +1,1170 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - CellApp{% endblock %}
+
+{% block mobile_content %}
+{% endblock %}
+
+{% block desktop_content %}
+<!-- Modern Desktop Dashboard -->
+<div class="desktop-dashboard">
+    <!-- Welcome Section -->
+    <div class="welcome-section">
+        <div class="welcome-card">
+            <div class="welcome-icon">
+                <i class="fas fa-home"></i>
+            </div>
+            <div class="welcome-content">
+                <h1>Welcome back, {{ user.name or 'Leader' }}!</h1>
+                <p>Manage your cell group activities and members</p>
+        </div>
+        </div>
+    </div>
+
+    <!-- Attendance Reminder Banner -->
+    {% if attendance_reminder and not attendance_reminder.is_past_deadline and latest_attendance and latest_attendance.status != 'complete' %}
+    <div class="attendance-reminder-banner {% if attendance_reminder.is_urgent %}urgent{% elif attendance_reminder.is_approaching %}approaching{% endif %}" id="attendanceReminderBanner">
+        <div class="reminder-content">
+            <div class="reminder-icon">
+                <i class="fas fa-{% if attendance_reminder.is_urgent %}exclamation-triangle{% else %}clock{% endif %}"></i>
+            </div>
+            <div class="reminder-text">
+                <h4>
+                    {% if attendance_reminder.is_urgent %}
+                        ⚠️ URGENT: Attendance Deadline Approaching!
+                    {% elif attendance_reminder.is_approaching %}
+                        ⏰ Reminder: Mark Your Attendance
+                    {% else %}
+                        📋 Don't Forget: Mark Your Attendance
+                    {% endif %}
+                </h4>
+                <p>
+                    Attendance for <strong>{{ current_attendance_date }}</strong> must be marked before 
+                    <strong id="deadlineDisplay">{{ attendance_reminder.deadline_str }}</strong>
+                </p>
+                <div class="countdown-timer" id="countdownTimer">
+                    <span class="time-unit">
+                        <span class="time-value" id="hoursRemaining">{{ attendance_reminder.hours_remaining }}</span>
+                        <span class="time-label">Hours</span>
+                    </span>
+                    <span class="time-separator">:</span>
+                    <span class="time-unit">
+                        <span class="time-value" id="minutesRemaining">{{ attendance_reminder.minutes_remaining }}</span>
+                        <span class="time-label">Minutes</span>
+                    </span>
+                </div>
+            </div>
+            <div class="reminder-action">
+                <a href="{{ url_for('main.attendance_detail', meeting_date=current_attendance_date) }}" class="btn btn-reminder">
+                    <i class="fas fa-user-check"></i> Mark Attendance Now
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Stats Overview -->
+    <div class="stats-overview">
+        <div class="stat-card">
+            <div class="stat-icon">
+                <i class="fas fa-users"></i>
+            </div>
+            <div class="stat-content">
+                <h3>{{ member_count }}</h3>
+                <p>Total Members</p>
+            </div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-icon">
+                <i class="fas fa-book"></i>
+            </div>
+            <div class="stat-content">
+                <h3>
+                    {% if tutorial_card and tutorial_card.status == 'updated' %}
+                        <span class="status-updated">Updated</span>
+                    {% else %}
+                        <span class="status-not-updated">Not Updated</span>
+                    {% endif %}
+                </h3>
+                <p>{{ tutorial_card.upcoming_date if tutorial_card else 'No upcoming meeting' }}</p>
+            </div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-icon">
+                <i class="fas fa-user-check"></i>
+            </div>
+            <div class="stat-content">
+                <h3>
+                    {% if latest_attendance and latest_attendance.status == 'complete' %}
+                        <span class="status-complete">Complete</span>
+                    {% elif latest_attendance and latest_attendance.status == 'partial' %}
+                        <span class="status-partial">Partial</span>
+                    {% else %}
+                        <span class="status-incomplete">Incomplete</span>
+                    {% endif %}
+                </h3>
+                <p>{{ latest_attendance.meeting_date if latest_attendance else 'No data' }}</p>
+            </div>
+        </div>
+</div>
+
+    <!-- Main Content Grid -->
+    <div class="main-content-grid">
+        <!-- Ministry Card -->
+    <div class="content-card ministry-card">
+            <div class="card-header">
+                <div class="card-icon">
+            <i class="fas fa-church"></i>
+        </div>
+                <div class="card-title">
+                <h2>Ministry</h2>
+                <p>Your ministry assignments</p>
+        </div>
+    </div>
+            <div class="card-content">
+                <div class="ministry-item">
+                    <div class="ministry-icon">
+                        <i class="fas fa-user-tie"></i>
+                    </div>
+                    <div class="ministry-content">
+                    <h3>Current Role</h3>
+                        <p>Cell Leader</p>
+                </div>
+            </div>
+                <div class="ministry-item">
+                    <div class="ministry-icon">
+                        <i class="fas fa-map-marker-alt"></i>
+                    </div>
+                    <div class="ministry-content">
+                <h3>Zone</h3>
+                        <p>Zone A</p>
+                    </div>
+                </div>
+        </div>
+    </div>
+    
+        <!-- Schedule Card -->
+    <div class="content-card schedule-card">
+            <div class="card-header">
+                <div class="card-icon">
+                    <i class="fas fa-calendar-alt"></i>
+                </div>
+                <div class="card-title">
+                    <h2>Schedule</h2>
+                    <p>Upcoming meetings and events</p>
+                </div>
+            </div>
+            <div class="card-content">
+                <div class="schedule-item">
+                    <div class="schedule-icon">
+                        <i class="fas fa-calendar-day"></i>
+                    </div>
+                    <div class="schedule-content">
+                        <h3>
+                            {% if next_meeting_date_obj == today.date() %}
+                                Today's Meeting
+                                {% else %}
+                                Next Meeting
+                                {% endif %}
+                        </h3>
+                        <p>{{ next_meeting_date }}</p>
+                    </div>
+                    <div class="schedule-arrow">
+                        <i class="fas fa-chevron-right"></i>
+                    </div>
+                    <a href="{{ url_for('main.meeting_tutorials', meeting_date=tutorial_card.upcoming_date) }}" class="schedule-link"></a>
+                </div>
+                <div class="schedule-item">
+                    <div class="schedule-icon">
+                        <i class="fas fa-calendar-week"></i>
+                    </div>
+                    <div class="schedule-content">
+                        <h3>Weekly Schedule</h3>
+                        <p>Tuesday Meetings</p>
+                    </div>
+                    <div class="schedule-arrow">
+                        <i class="fas fa-chevron-right"></i>
+                    </div>
+                    <a href="{{ url_for('main.meeting_dates') }}" class="schedule-link"></a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="quick-actions">
+        <a href="{{ url_for('main.meeting_dates') }}" class="action-btn">
+            <div class="action-icon">
+                <i class="fas fa-calendar-check"></i>
+            </div>
+            <div class="action-content">
+                <h3>Meetings</h3>
+                <p>View meeting dates</p>
+            </div>
+        </a>
+        
+        <a href="{{ url_for('main.members') }}" class="action-btn">
+            <div class="action-icon">
+                <i class="fas fa-users"></i>
+            </div>
+            <div class="action-content">
+                <h3>Members</h3>
+                <p>Manage cell group</p>
+            </div>
+        </a>
+        
+        <a href="{{ url_for('main.tutorials_list') }}" class="action-btn">
+            <div class="action-icon">
+                <i class="fas fa-book"></i>
+            </div>
+            <div class="action-content">
+                <h3>Tutorials</h3>
+                <p>View tutorials</p>
+            </div>
+        </a>
+        
+        <a href="{{ url_for('main.attendance_list') }}" class="action-btn">
+            <div class="action-icon">
+                <i class="fas fa-user-check"></i>
+            </div>
+            <div class="action-content">
+                <h3>Attendance</h3>
+                <p>Mark attendance</p>
+            </div>
+        </a>
+    </div>
+    
+    <!-- Tutorials List (Hidden by default) -->
+    <div class="quick-access-list" id="tutorials-list" style="display: none;">
+        <div class="list-header">
+            <h3>Tutorials</h3>
+        </div>
+        <div class="quick-access-grid">
+            {% if tutorial_list %}
+                {% for tutorial in tutorial_list %}
+                    <a href="{{ url_for('main.meeting_tutorials', meeting_date=tutorial.date) }}" class="quick-access-item">
+                        <div class="item-date">
+                            {{ tutorial.date }}
+                            {% if tutorial.is_upcoming %}
+                                <span class="upcoming-badge">Upcoming</span>
+                            {% endif %}
+                        </div>
+                        <div class="item-status {{ tutorial.status }}">
+                            {% if tutorial.status == 'updated' %}
+                                <i class="fas fa-check-circle"></i> Updated
+                            {% else %}
+                                <i class="fas fa-exclamation-circle"></i> Not Updated
+                            {% endif %}
+                        </div>
+                    </a>
+                {% endfor %}
+            {% else %}
+                <div class="quick-access-empty">
+                    <i class="fas fa-book"></i>
+                    <span>No tutorials available</span>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Attendance List (Hidden by default) -->
+    <div class="quick-access-list" id="attendance-list" style="display: none;">
+        <div class="list-header">
+            <h3>Attendance</h3>
+        </div>
+        <div class="quick-access-grid">
+            {% if attendance_list %}
+                {% for attendance in attendance_list %}
+                    <a href="{{ url_for('main.attendance_detail', meeting_date=attendance.date) }}" class="quick-access-item">
+                        <div class="item-date">{{ attendance.date }}</div>
+                        <div class="item-status {{ attendance.status }}">
+                            {% if attendance.status == 'complete' %}
+                                <i class="fas fa-check-circle"></i> Complete
+                            {% elif attendance.status == 'partial' %}
+                                <i class="fas fa-exclamation-triangle"></i> Partial
+                            {% else %}
+                                <i class="fas fa-times-circle"></i> Incomplete
+                            {% endif %}
+                        </div>
+                    </a>
+                {% endfor %}
+            {% else %}
+                <div class="quick-access-empty">
+                    <i class="fas fa-user-check"></i>
+                    <span>No attendance records</span>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block mobile_nav %}
+<a href="{{ url_for('main.index') }}" class="nav-link active">
+    <i class="fas fa-home"></i>
+    <span>Home</span>
+</a>
+<a href="{{ url_for('main.members') }}" class="nav-link">
+    <i class="fas fa-users"></i>
+    <span>Members</span>
+</a>
+<a href="{{ url_for('main.profile') }}" class="nav-link">
+    <i class="fas fa-user"></i>
+    <span>Profile</span>
+</a>
+<a href="{{ url_for('auth.logout') }}" class="nav-link">
+    <i class="fas fa-sign-out-alt"></i>
+    <span>Logout</span>
+</a>
+{% endblock %}
+
+<script>
+function toggleQuickAccess(type) {
+    const list = document.getElementById(type + '-list');
+    const chevron = document.getElementById(type + '-chevron');
+    
+    if (list.style.display === 'none') {
+        list.style.display = 'grid';
+        chevron.classList.add('rotated');
+    } else {
+        list.style.display = 'none';
+        chevron.classList.remove('rotated');
+    }
+}
+
+// Attendance Countdown Timer
+{% if attendance_reminder and not attendance_reminder.is_past_deadline %}
+(function() {
+    const deadline = new Date('{{ attendance_reminder.deadline_iso }}');
+    
+    function updateCountdown() {
+        const now = new Date();
+        const timeRemaining = deadline - now;
+        
+        if (timeRemaining <= 0) {
+            // Deadline passed
+            document.getElementById('countdownTimer').innerHTML = '<span style="color: #ef4444; font-weight: 700;">DEADLINE PASSED</span>';
+            const banner = document.getElementById('attendanceReminderBanner');
+            if (banner) {
+                banner.classList.add('urgent');
+            }
+            return;
+        }
+        
+        const hours = Math.floor(timeRemaining / (1000 * 60 * 60));
+        const minutes = Math.floor((timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
+        
+        const hoursEl = document.getElementById('hoursRemaining');
+        const minutesEl = document.getElementById('minutesRemaining');
+        
+        if (hoursEl) hoursEl.textContent = String(hours).padStart(2, '0');
+        if (minutesEl) minutesEl.textContent = String(minutes).padStart(2, '0');
+        
+        // Update urgency classes
+        const banner = document.getElementById('attendanceReminderBanner');
+        if (banner) {
+            if (hours < 6) {
+                banner.classList.add('urgent');
+                banner.classList.remove('approaching');
+            } else if (hours < 24) {
+                banner.classList.add('approaching');
+                banner.classList.remove('urgent');
+            }
+        }
+    }
+    
+    // Update immediately
+    updateCountdown();
+    
+    // Update every minute
+    setInterval(updateCountdown, 60000);
+})();
+{% endif %}
+</script>
+
+{% block extra_css %}
+<style>
+/* ===========================================
+   MODERN DESKTOP DASHBOARD STYLING
+   =========================================== */
+
+/* Status indicators */
+.status-updated {
+    color: #10b981 !important;
+    font-weight: 600 !important;
+}
+
+.status-not-updated {
+    color: #f59e0b !important;
+    font-weight: 600 !important;
+}
+
+.status-complete {
+    color: #10b981 !important;
+    font-weight: 600 !important;
+}
+
+.status-partial {
+    color: #f59e0b !important;
+    font-weight: 600 !important;
+}
+
+.status-incomplete {
+    color: #ef4444 !important;
+    font-weight: 600 !important;
+}
+
+/* Quick Access Cards for Desktop */
+.quick-access-card {
+    background: #1e293b;
+    border: 1px solid #475569;
+    border-radius: 16px;
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    grid-column: span 2;
+}
+
+.quick-access-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+    cursor: pointer;
+    padding: 0.75rem;
+    border-radius: 8px;
+    transition: background-color 0.3s ease;
+}
+
+.quick-access-header:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.quick-access-toggle {
+    color: #94a3b8;
+    font-size: 1.2rem;
+    transition: transform 0.3s ease, color 0.3s ease;
+}
+
+.quick-access-toggle.rotated {
+    transform: rotate(180deg);
+    color: white;
+}
+
+.quick-access-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 1rem;
+    font-size: 20px;
+    color: white;
+}
+
+.quick-access-card:nth-of-type(1) .quick-access-icon {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+
+.quick-access-card:nth-of-type(2) .quick-access-icon {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+}
+
+.quick-access-title {
+    color: white;
+    font-size: 1.4rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.quick-access-list {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+}
+
+.quick-access-item {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 1.25rem;
+    text-decoration: none;
+    color: inherit;
+    transition: all 0.3s ease;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.quick-access-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateY(-2px);
+    text-decoration: none;
+    color: inherit;
+}
+
+.item-date {
+    color: white;
+    font-size: 1rem;
+    font-weight: 500;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.upcoming-badge {
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    color: white;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.2rem 0.5rem;
+    border-radius: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    align-self: flex-start;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.item-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.item-status.updated,
+.item-status.complete {
+    color: #10b981;
+}
+
+.item-status.not_updated,
+.item-status.incomplete {
+    color: #ef4444;
+}
+
+.item-status.partial {
+    color: #f59e0b;
+}
+
+.quick-access-empty {
+    text-align: center;
+    padding: 3rem;
+    color: #94a3b8;
+    font-size: 1rem;
+    grid-column: span 2;
+}
+
+.quick-access-empty i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    display: block;
+    opacity: 0.5;
+}
+
+/* Quick Access Lists for Desktop */
+.quick-access-list {
+    background: #1e293b;
+    border: 1px solid #475569;
+    border-radius: 16px;
+    padding: 2rem;
+    margin-top: 2rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.list-header {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.list-header h3 {
+    color: white;
+    font-size: 1.4rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.quick-access-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+}
+
+/* Desktop Dashboard Container */
+.desktop-dashboard {
+    background: #0f172a;
+    min-height: 100vh;
+    padding: 2rem;
+    color: white;
+}
+
+/* Welcome Section */
+.welcome-section {
+    margin-bottom: 3rem;
+}
+
+.welcome-card {
+    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+    border: 1px solid #475569;
+    border-radius: 20px;
+    padding: 2.5rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+.welcome-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #3b82f6, #10b981, #ef4444);
+    border-radius: 20px 20px 0 0;
+}
+
+.welcome-icon {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    color: white;
+    box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4);
+        margin-bottom: 1.5rem;
+    }
+    
+.welcome-content h1 {
+    color: white;
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin: 0 0 0.5rem 0;
+    line-height: 1.2;
+}
+
+.welcome-content p {
+    color: #cbd5e1;
+    font-size: 1.25rem;
+    margin: 0;
+    line-height: 1.4;
+}
+
+/* Stats Overview */
+.stats-overview {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+    margin-bottom: 3rem;
+}
+
+.stat-card {
+    background: #1e293b;
+    border: 1px solid #475569;
+    border-radius: 16px;
+    padding: 2rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+    transition: left 0.6s ease;
+}
+
+.stat-card:hover::before {
+    left: 100%;
+}
+
+.stat-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+}
+
+.stat-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    color: white;
+    margin-bottom: 1rem;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.stat-card:nth-child(1) .stat-icon {
+    background: linear-gradient(135deg, #10b981, #059669);
+    box-shadow: 0 4px 16px rgba(16, 185, 129, 0.4);
+}
+
+.stat-card:nth-child(2) .stat-icon {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    box-shadow: 0 4px 16px rgba(245, 158, 11, 0.4);
+}
+
+.stat-card:nth-child(3) .stat-icon {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    box-shadow: 0 4px 16px rgba(239, 68, 68, 0.4);
+}
+
+.stat-content h3 {
+    color: white;
+    font-size: 2rem;
+    font-weight: 700;
+    margin: 0 0 0.5rem 0;
+    line-height: 1.2;
+}
+
+.stat-content p {
+    color: #94a3b8;
+    font-size: 1rem;
+    margin: 0;
+    line-height: 1.4;
+}
+
+/* Main Content Grid */
+.main-content-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    margin-bottom: 3rem;
+}
+
+/* Content Cards */
+.content-card {
+    background: #1e293b;
+    border: 1px solid #475569;
+    border-radius: 20px;
+    padding: 2rem;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+    position: relative;
+    overflow: hidden;
+}
+
+.content-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #3b82f6, #10b981, #ef4444);
+    border-radius: 20px 20px 0 0;
+}
+
+.card-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 2rem;
+    gap: 1.5rem;
+}
+
+.card-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    color: white;
+    flex-shrink: 0;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.ministry-card .card-icon {
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+    box-shadow: 0 8px 24px rgba(139, 92, 246, 0.4);
+}
+
+.schedule-card .card-icon {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    box-shadow: 0 8px 24px rgba(239, 68, 68, 0.4);
+}
+
+.card-title h2 {
+    color: white;
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin: 0 0 0.5rem 0;
+    line-height: 1.2;
+}
+
+.card-title p {
+    color: #cbd5e1;
+    font-size: 1rem;
+    margin: 0;
+    line-height: 1.4;
+}
+
+.card-content {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+/* Ministry Items */
+.ministry-item {
+    background: #334155;
+    border: 1px solid #475569;
+    border-radius: 16px;
+    padding: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.ministry-item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+    transition: left 0.6s ease;
+}
+
+.ministry-item:hover::before {
+    left: 100%;
+}
+
+.ministry-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+            }
+            
+            .ministry-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+                font-size: 18px;
+    color: white;
+    flex-shrink: 0;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.ministry-item:nth-child(1) .ministry-icon {
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    box-shadow: 0 4px 16px rgba(59, 130, 246, 0.4);
+}
+
+.ministry-item:nth-child(2) .ministry-icon {
+    background: linear-gradient(135deg, #10b981, #059669);
+    box-shadow: 0 4px 16px rgba(16, 185, 129, 0.4);
+}
+
+.ministry-content h3 {
+    color: white;
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 0 0 0.5rem 0;
+    line-height: 1.3;
+}
+
+.ministry-content p {
+    color: #94a3b8;
+                font-size: 0.9rem;
+    margin: 0;
+    line-height: 1.4;
+}
+
+/* Schedule Items */
+.schedule-item {
+    background: #334155;
+    border: 1px solid #475569;
+    border-radius: 16px;
+    padding: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+}
+
+.schedule-item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+    transition: left 0.6s ease;
+}
+
+.schedule-item:hover::before {
+    left: 100%;
+}
+
+.schedule-item:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+    border-color: #3b82f6;
+}
+
+.schedule-item:nth-child(1):hover {
+    border-color: #3b82f6;
+}
+
+.schedule-item:nth-child(2):hover {
+    border-color: #10b981;
+}
+
+.schedule-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    color: white;
+    flex-shrink: 0;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.schedule-item:nth-child(1) .schedule-icon {
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    box-shadow: 0 4px 16px rgba(59, 130, 246, 0.4);
+}
+
+.schedule-item:nth-child(2) .schedule-icon {
+    background: linear-gradient(135deg, #10b981, #059669);
+    box-shadow: 0 4px 16px rgba(16, 185, 129, 0.4);
+}
+
+.schedule-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.schedule-content h3 {
+    color: white;
+        font-size: 1.1rem;
+    font-weight: 600;
+    margin: 0 0 0.5rem 0;
+    line-height: 1.3;
+}
+
+.schedule-content p {
+    color: #94a3b8;
+    font-size: 0.9rem;
+    margin: 0;
+    line-height: 1.4;
+}
+
+.schedule-arrow {
+    color: #94a3b8;
+    font-size: 16px;
+    opacity: 0.7;
+    transition: all 0.3s ease;
+    flex-shrink: 0;
+}
+
+.schedule-item:hover .schedule-arrow {
+    opacity: 1;
+    transform: translateX(4px);
+}
+
+.schedule-item:nth-child(1):hover .schedule-arrow {
+    color: #3b82f6;
+}
+
+.schedule-item:nth-child(2):hover .schedule-arrow {
+    color: #10b981;
+}
+
+.schedule-link {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1;
+    text-decoration: none;
+}
+
+/* Quick Actions */
+.quick-actions {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.5rem;
+}
+
+.action-btn {
+    background: #1e293b;
+    border: 1px solid #475569;
+    border-radius: 16px;
+    padding: 2rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.action-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+    transition: left 0.6s ease;
+}
+
+.action-btn:hover::before {
+    left: 100%;
+}
+
+.action-btn:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+    text-decoration: none;
+    color: inherit;
+}
+
+.action-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    color: white;
+    margin-bottom: 1rem;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.action-btn:nth-child(1) .action-icon {
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    box-shadow: 0 4px 16px rgba(59, 130, 246, 0.4);
+}
+
+.action-btn:nth-child(2) .action-icon {
+    background: linear-gradient(135deg, #10b981, #059669);
+    box-shadow: 0 4px 16px rgba(16, 185, 129, 0.4);
+}
+
+.action-btn:nth-child(3) .action-icon {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    box-shadow: 0 4px 16px rgba(245, 158, 11, 0.4);
+}
+
+.action-btn:nth-child(4) .action-icon {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    box-shadow: 0 4px 16px rgba(239, 68, 68, 0.4);
+}
+
+.action-content h3 {
+    color: white;
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0 0 0.5rem 0;
+    line-height: 1.3;
+}
+
+.action-content p {
+    color: #94a3b8;
+    font-size: 0.9rem;
+    margin: 0;
+    line-height: 1.4;
+}
+
+/* Desktop Responsive Design */
+@media (max-width: 1200px) {
+    .stats-overview {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1.25rem;
+    }
+    
+    .main-content-grid {
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+    }
+    
+    .quick-actions {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1.25rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .desktop-dashboard {
+        padding: 1rem;
+    }
+    
+    .stats-overview {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    
+    .quick-actions {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    
+    .welcome-content h1 {
+        font-size: 2rem;
+    }
+    
+    .welcome-content p {
+        font-size: 1rem;
+    }
+}
+
+</style>
+{% endblock %}
+
+{% block desktop_nav %}
+<a href="{{ url_for('main.index') }}" class="nav-link active">
+    <i class="fas fa-home"></i>
+    <span>Home</span>
+</a>
+<a href="{{ url_for('main.members') }}" class="nav-link">
+    <i class="fas fa-users"></i>
+    <span>Members</span>
+</a>
+<a href="{{ url_for('main.profile') }}" class="nav-link">
+    <i class="fas fa-user"></i>
+    <span>Profile</span>
+</a>
+<a href="{{ url_for('auth.logout') }}" class="nav-link">
+    <i class="fas fa-sign-out-alt"></i>
+    <span>Logout</span>
+</a>
+{% endblock %}

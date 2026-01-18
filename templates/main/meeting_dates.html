@@ -1,0 +1,1109 @@
+{% extends "base.html" %}
+{% import 'macros/components.html' as components %}
+{% block title %}Meeting Dates - CellApp{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Modern Meeting Dates - Professional UI */
+
+/* CSS Variables for Design System - Dark Theme */
+:root {
+    --primary-color: #1F6FEB;
+    --primary-dark: #1d4ed8;
+    --secondary-color: #10b981;
+    --secondary-dark: #059669;
+    --accent-color: #f59e0b;
+    --text-primary: #f0f6fc;
+    --text-secondary: #8b949e;
+    --text-muted: #6e7681;
+    --bg-primary: #1e293b;
+    --bg-secondary: #21262d;
+    --bg-tertiary: #334155;
+    --border-color: #30363d;
+    --border-light: #475569;
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+    --radius-sm: 0.375rem;
+    --radius-md: 0.5rem;
+    --radius-lg: 0.75rem;
+    --radius-xl: 1rem;
+}
+
+/* CRITICAL FIXES - Override Base Template Dark Theme */
+
+/* Override base template container */
+.desktop-box-container {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    max-width: none !important;
+    margin: 0 !important;
+    min-height: auto !important;
+    display: block !important;
+    flex-direction: unset !important;
+}
+
+.desktop-box-content {
+    background: transparent !important;
+    padding: 0 !important;
+    overflow: visible !important;
+}
+
+/* Override body styles */
+body {
+    background: #0f172a !important;
+    color: #f0f6fc !important;
+}
+
+/* Override base template dark theme */
+.modern-meeting-dates {
+    min-height: 100vh !important;
+    background: #0f172a !important;
+    padding: 2rem !important;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+    color: #f0f6fc !important;
+    position: relative !important;
+    z-index: 1 !important;
+}
+
+/* Additional critical overrides */
+.desktop-box-header {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+}
+
+.desktop-nav {
+    display: none !important;
+}
+
+/* Force all text to use light theme colors */
+.modern-meeting-dates h1,
+.modern-meeting-dates h2,
+.modern-meeting-dates h3,
+.modern-meeting-dates h4,
+.modern-meeting-dates h5,
+.modern-meeting-dates h6,
+.modern-meeting-dates p,
+.modern-meeting-dates span,
+.modern-meeting-dates div,
+.modern-meeting-dates a,
+.modern-meeting-dates button {
+    color: inherit !important;
+}
+
+/* Specific overrides for all elements */
+.modern-meeting-dates .hero-text h1 {
+    color: #f0f6fc !important;
+}
+
+.modern-meeting-dates .hero-text p {
+    color: #8b949e !important;
+}
+
+.modern-meeting-dates .timeline-header h2 {
+    color: #f0f6fc !important;
+}
+
+.modern-meeting-dates .meeting-info h3 {
+    color: #f0f6fc !important;
+}
+
+.modern-meeting-dates .meeting-info p {
+    color: #8b949e !important;
+}
+
+.modern-meeting-dates .stat-number {
+    color: #f0f6fc !important;
+}
+
+.modern-meeting-dates .stat-label {
+    color: #8b949e !important;
+}
+
+.modern-meeting-dates .filter-btn {
+    color: #8b949e !important;
+    background: #1e293b !important;
+    border-color: #30363d !important;
+}
+
+.modern-meeting-dates .filter-btn.active {
+    color: #f0f6fc !important;
+    background: #1F6FEB !important;
+    border-color: #1F6FEB !important;
+}
+
+.modern-meeting-dates .quick-action-btn {
+    color: #f0f6fc !important;
+}
+
+.modern-meeting-dates .quick-action-btn span {
+    color: #f0f6fc !important;
+}
+
+/* Hero Section */
+.hero-section {
+    margin-bottom: 3rem;
+}
+
+.hero-content {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    background: linear-gradient(135deg, #1e293b 0%, #21262d 100%);
+    border: 1px solid #30363d;
+    border-radius: var(--radius-xl);
+    padding: 2.5rem;
+    box-shadow: var(--shadow-lg);
+    position: relative;
+    overflow: hidden;
+}
+
+.hero-content::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #1F6FEB, #10b981, #ef4444);
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+}
+
+.hero-icon {
+    width: 64px;
+    height: 64px;
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+    border-radius: var(--radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    box-shadow: var(--shadow-md);
+}
+
+.hero-text h1 {
+    color: var(--text-primary) !important;
+    font-size: 2.5rem;
+    font-weight: 800;
+    margin: 0 0 0.5rem 0;
+    letter-spacing: -0.025em;
+}
+
+.hero-text p {
+    color: var(--text-secondary) !important;
+    font-size: 1.125rem;
+    margin: 0;
+    font-weight: 500;
+}
+
+/* Dashboard Container */
+.dashboard-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+/* Stats Card */
+.stats-card {
+    background: linear-gradient(135deg, #1e293b 0%, #21262d 100%);
+    border: 1px solid #30363d;
+    border-radius: var(--radius-xl);
+    padding: 2rem;
+    box-shadow: var(--shadow-lg);
+    position: relative;
+    overflow: hidden;
+}
+
+.stats-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #1F6FEB, #10b981, #ef4444);
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+}
+
+.stats-content {
+    display: flex;
+    align-items: center;
+    gap: 3rem;
+}
+
+.stat-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.stat-icon {
+    width: 48px;
+    height: 48px;
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+}
+
+.stat-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.stat-number {
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    line-height: 1;
+}
+
+.stat-label {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.stat-divider {
+    width: 1px;
+    height: 48px;
+    background: var(--border-color);
+}
+
+/* Timeline Container */
+.timeline-container {
+    background: linear-gradient(135deg, #1e293b 0%, #21262d 100%);
+    border: 1px solid #30363d;
+    border-radius: var(--radius-xl);
+    padding: 2.5rem;
+    box-shadow: var(--shadow-lg);
+    position: relative;
+    overflow: hidden;
+}
+
+.timeline-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #1F6FEB, #10b981, #ef4444);
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+}
+
+.timeline-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2.5rem;
+}
+
+.timeline-header h2 {
+    color: var(--text-primary);
+    font-size: 1.875rem;
+    font-weight: 700;
+    margin: 0;
+}
+
+.timeline-filter {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.filter-btn {
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.filter-btn.active {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+/* Timeline */
+.timeline {
+    position: relative;
+}
+
+.timeline-item {
+    display: block;
+    margin-bottom: 2rem;
+}
+
+.timeline-item:last-child {
+    margin-bottom: 0;
+}
+
+.timeline-marker {
+    display: none;
+}
+
+.timeline-content {
+    width: 100%;
+}
+
+/* Meeting Cards */
+.meeting-card {
+    background: linear-gradient(135deg, #21262d 0%, #161b22 100%);
+    border: 1px solid #30363d;
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    box-shadow: var(--shadow-sm);
+    transition: all 0.3s ease;
+    width: 100%;
+    position: relative;
+    overflow: hidden;
+}
+
+.meeting-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+    transition: left 0.6s ease;
+}
+
+.meeting-card:hover::before {
+    left: 100%;
+}
+
+.meeting-card:hover {
+    box-shadow: var(--shadow-md);
+    border-color: #1F6FEB;
+    transform: translateY(-2px);
+}
+
+.meeting-header {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.meeting-date {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: #334155;
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    min-width: 80px;
+    flex-shrink: 0;
+}
+
+.date-day {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #1F6FEB;
+    line-height: 1;
+}
+
+.date-month {
+    font-size: 0.75rem;
+    color: #8b949e;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.meeting-info {
+    flex: 1;
+}
+
+.meeting-info h3 {
+    color: var(--text-primary);
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0 0 0.25rem 0;
+}
+
+.meeting-info p {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    margin: 0;
+    font-weight: 500;
+}
+
+.meeting-actions {
+    display: flex;
+    gap: 1rem;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+.action-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--radius-md);
+    text-decoration: none;
+    font-size: 0.875rem;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    border: 1px solid;
+}
+
+.action-btn.primary {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.action-btn.primary:hover {
+    background: var(--primary-dark);
+    border-color: var(--primary-dark);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+
+.action-btn.secondary {
+    background: #1e293b;
+    color: #10b981;
+    border-color: #10b981;
+}
+
+.action-btn.secondary:hover {
+    background: #10b981;
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+
+/* Quick Actions */
+.quick-actions {
+    display: flex;
+    justify-content: center;
+}
+
+.quick-action-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 2rem;
+    background: linear-gradient(135deg, #1e293b 0%, #21262d 100%);
+    border: 1px solid #30363d;
+    border-radius: var(--radius-lg);
+    color: var(--text-primary);
+    text-decoration: none;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: var(--shadow-lg);
+}
+
+.quick-action-btn:hover {
+    background: linear-gradient(135deg, #21262d 0%, #1e293b 100%);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+    text-decoration: none;
+    color: var(--text-primary);
+    border-color: #1F6FEB;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .modern-meeting-dates {
+        padding: 1rem;
+    }
+    
+    .hero-content {
+        padding: 1.5rem;
+        flex-direction: column;
+        text-align: center;
+        gap: 1rem;
+    }
+    
+    .hero-text h1 {
+        font-size: 2rem;
+    }
+    
+    .stats-content {
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+    
+    .stat-divider {
+        width: 100%;
+        height: 1px;
+    }
+    
+    .timeline-container {
+        padding: 1.5rem;
+    }
+    
+    .timeline-header {
+        flex-direction: column;
+        gap: 1rem;
+        align-items: flex-start;
+    }
+    
+    .timeline-item {
+        gap: 1rem;
+    }
+    
+    .meeting-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+    
+    .meeting-date {
+        flex-direction: row;
+        min-width: auto;
+    }
+    
+    .meeting-actions {
+        flex-direction: column;
+    }
+    
+    .action-btn {
+        justify-content: center;
+    }
+}
+
+@media (max-width: 480px) {
+    .modern-meeting-dates {
+        padding: 0.5rem;
+    }
+    
+    .hero-content {
+        padding: 1rem;
+    }
+    
+    .timeline-container {
+        padding: 1rem;
+    }
+    
+    .meeting-card {
+        padding: 1rem;
+    }
+}
+
+/* Pagination Controls */
+.pagination-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.pagination-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    background: linear-gradient(135deg, var(--bg-primary), var(--bg-secondary));
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.pagination-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+    border-color: var(--primary-color);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.pagination-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.pagination-pages {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.page-btn {
+    min-width: 40px;
+    height: 40px;
+    padding: 0.5rem;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.page-btn:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+    transform: translateY(-1px);
+}
+
+.page-btn.active {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: white;
+}
+
+.page-info {
+    display: inline-block;
+}
+
+/* Hide items by default for pagination */
+.meeting-item-paginated {
+    display: none;
+}
+
+.meeting-item-paginated.active {
+    display: block;
+}
+
+/* Responsive Pagination */
+@media (max-width: 768px) {
+    .pagination-controls {
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+    
+    .pagination-btn {
+        padding: 0.625rem 1rem;
+        font-size: 0.8rem;
+    }
+    
+    .page-btn {
+        min-width: 36px;
+        height: 36px;
+        font-size: 0.8rem;
+    }
+}
+</style>
+{% endblock %}
+
+{% block mobile_content %}
+{% endblock %}
+
+{% block desktop_content %}
+<div class="modern-meeting-dates">
+    <!-- Hero Section -->
+    <div class="hero-section">
+        <div class="hero-content">
+            <div class="hero-icon">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M8 2V5M16 2V5M3.5 9.09H20.5M21 8.5V17C21 20 19.5 22 16 22H8C4.5 22 3 20 3 17V8.5C3 5.5 4.5 3.5 8 3.5H16C19.5 3.5 21 5.5 21 8.5Z" stroke="currentColor" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M8 13H8.01M12 13H12.01M16 13H16.01M8 17H8.01M12 17H12.01M16 17H16.01" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </div>
+            <div class="hero-text">
+                <h1>Meeting Schedule</h1>
+                <p>Track your cell group meetings and activities</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Dashboard -->
+    <div class="dashboard-container">
+        <!-- Stats Card -->
+        <div class="stats-card">
+            <div class="stats-content">
+                <div class="stat-item">
+                    <div class="stat-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M8 2V5M16 2V5M3.5 9.09H20.5M21 8.5V17C21 20 19.5 22 16 22H8C4.5 22 3 20 3 17V8.5C3 5.5 4.5 3.5 8 3.5H16C19.5 3.5 21 5.5 21 8.5Z" stroke="currentColor" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-number">{{ meetings|length }}</span>
+                        <span class="stat-label">Recent Meetings</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Upcoming Meeting -->
+        {% if meetings %}
+            {% for meeting in meetings %}
+                {% if meeting.is_upcoming %}
+                <div class="timeline-container" style="margin-bottom: 2rem; border-color: #3b82f6;">
+                    <div class="timeline-header">
+                        <h2 style="color: #3b82f6;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="display: inline-block; vertical-align: middle; margin-right: 0.5rem;">
+                                <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" fill="currentColor"/>
+                            </svg>
+                            Upcoming Meeting
+                        </h2>
+                        <span class="badge" style="background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: white; padding: 0.5rem 1rem; border-radius: 0.5rem; font-weight: 600;">Latest</span>
+                    </div>
+                    <div class="timeline">
+                        <div class="timeline-item">
+                            <div class="timeline-content">
+                                <div class="meeting-card" style="border-color: #3b82f6; box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);">
+                                    <div class="meeting-header">
+                                        <div class="meeting-date" style="background: linear-gradient(135deg, #3b82f6, #1d4ed8);">
+                                            <span class="date-day">{{ meeting.date.split(',')[0].split()[-1] }}</span>
+                                            <span class="date-month">{{ meeting.date.split(',')[0].split()[0] }}</span>
+                                        </div>
+                                        <div class="meeting-info">
+                                            <h3>{{ meeting.date }}</h3>
+                                            <p>{{ meeting.meeting_type }}</p>
+                                            {% if meeting.description %}
+                                            <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">{{ meeting.description }}</p>
+                                            {% endif %}
+                                        </div>
+                                        <div class="meeting-actions">
+                                            <a href="{{ url_for('main.meeting_tutorials', meeting_date=meeting.date) }}" class="action-btn primary">
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                    <path d="M4 19.5C4 18.1193 5.11929 17 6.5 17H20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                    <path d="M6.5 2H20V22H6.5C5.11929 22 4 20.8807 4 19.5V4.5C4 3.11929 5.11929 2 6.5 2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                </svg>
+                                                <span>Tutorials</span>
+                                            </a>
+                                            <!-- Attendance button hidden for upcoming meetings -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            {% endfor %}
+        {% endif %}
+
+        <!-- Recent Meetings Timeline -->
+        {% if meetings %}
+            {% set recent_meetings = meetings|selectattr('is_upcoming', 'equalto', false)|list %}
+            {% if recent_meetings %}
+            <div class="timeline-container">
+                <div class="timeline-header">
+                    <h2>Recent Meetings</h2>
+                    <div style="display: flex; align-items: center; gap: 1rem;">
+                        <span class="badge" style="background: var(--bg-tertiary); color: var(--text-secondary); padding: 0.5rem 1rem; border-radius: 0.5rem; font-weight: 600;">{{ recent_meetings|length }} Meeting{% if recent_meetings|length != 1 %}s{% endif %}</span>
+                        <span id="pageInfo" class="page-info" style="color: var(--text-secondary); font-size: 0.875rem; font-weight: 500;"></span>
+                    </div>
+                </div>
+                <div class="timeline" id="meetingsTimeline">
+                    {% for meeting in recent_meetings %}
+                    <div class="timeline-item meeting-item-paginated" data-meeting-index="{{ loop.index0 }}">
+                        <div class="timeline-content">
+                            <div class="meeting-card">
+                                <div class="meeting-header">
+                                    <div class="meeting-date">
+                                        <span class="date-day">{{ meeting.date.split(',')[0].split()[-1] }}</span>
+                                        <span class="date-month">{{ meeting.date.split(',')[0].split()[0] }}</span>
+                                    </div>
+                                    <div class="meeting-info">
+                                        <h3>{{ meeting.date }}</h3>
+                                        <p>{{ meeting.meeting_type }}</p>
+                                        {% if meeting.description %}
+                                        <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">{{ meeting.description }}</p>
+                                        {% endif %}
+                                    </div>
+                                    <div class="meeting-actions">
+                                        <a href="{{ url_for('main.meeting_tutorials', meeting_date=meeting.date) }}" class="action-btn primary">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                <path d="M4 19.5C4 18.1193 5.11929 17 6.5 17H20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                <path d="M6.5 2H20V22H6.5C5.11929 22 4 20.8807 4 19.5V4.5C4 3.11929 5.11929 2 6.5 2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                            </svg>
+                                            <span>Tutorials</span>
+                                        </a>
+                                        <a href="{{ url_for('main.attendance_detail', meeting_date=meeting.date) }}" class="action-btn secondary">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                <path d="M20 21V19C20 17.9391 19.5786 16.9217 18.8284 16.1716C18.0783 15.4214 17.0609 15 16 15H8C6.93913 15 5.92172 15.4214 5.17157 16.1716C4.42143 16.9217 4 17.9391 4 19V21" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                <circle cx="12" cy="7" r="4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                            </svg>
+                                            <span>Attendance</span>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                <!-- Pagination Controls -->
+                <div class="pagination-controls" id="paginationControls" style="display: none;">
+                    <button class="pagination-btn" id="prevBtn" onclick="changePage(-1)">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <span>Previous</span>
+                    </button>
+                    
+                    <div class="pagination-pages" id="paginationPages"></div>
+                    
+                    <button class="pagination-btn" id="nextBtn" onclick="changePage(1)">
+                        <span>Next</span>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M9 18L15 12L9 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            {% endif %}
+        {% endif %}
+
+        <!-- No Meetings -->
+        {% if not meetings %}
+        <div class="timeline-container">
+            <div class="timeline">
+                <div class="timeline-item">
+                    <div class="timeline-content">
+                        <div class="meeting-card">
+                            <div style="text-align: center; padding: 3rem 2rem; color: #94a3b8;">
+                                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-bottom: 1rem; opacity: 0.5;">
+                                    <path d="M8 2V5M16 2V5M3.5 9.09H20.5M21 8.5V17C21 20 19.5 22 16 22H8C4.5 22 3 20 3 17V8.5C3 5.5 4.5 3.5 8 3.5H16C19.5 3.5 21 5.5 21 8.5Z" stroke="currentColor" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                                <h3 style="color: #e2e8f0; font-size: 1.2rem; font-weight: 600; margin: 0 0 0.5rem 0;">No Meetings Found</h3>
+                                <p style="color: #94a3b8; font-size: 0.9rem; margin: 0; opacity: 0.8;">No meetings found in database</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Quick Actions -->
+        <div class="quick-actions">
+            <a href="{{ url_for('main.index') }}" class="quick-action-btn">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M3 9L12 2L21 9V20C21 20.5304 20.7893 21.0391 20.4142 21.4142C20.0391 21.7893 19.5304 22 19 22H5C4.46957 22 3.96086 21.7893 3.58579 21.4142C3.21071 21.0391 3 20.5304 3 20V9Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M9 22V12H15V22" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span>Back to Dashboard</span>
+            </a>
+        </div>
+    </div>
+</div>
+
+<script>
+// Desktop Pagination Logic
+const MEETINGS_PER_PAGE = 5;
+let currentPage = 1;
+let totalPages = 1;
+let totalMeetings = 0;
+
+function initPagination() {
+    const meetingItems = document.querySelectorAll('.meeting-item-paginated');
+    totalMeetings = meetingItems.length;
+    totalPages = Math.ceil(totalMeetings / MEETINGS_PER_PAGE);
+    
+    // Only show pagination if more than 5 meetings
+    if (totalMeetings > MEETINGS_PER_PAGE) {
+        document.getElementById('paginationControls').style.display = 'flex';
+        renderPaginationButtons();
+        showPage(1);
+    } else {
+        // Show all meetings if 5 or less
+        meetingItems.forEach(item => item.classList.add('active'));
+        updatePageInfo();
+    }
+}
+
+function showPage(page) {
+    currentPage = page;
+    const meetingItems = document.querySelectorAll('.meeting-item-paginated');
+    const startIndex = (page - 1) * MEETINGS_PER_PAGE;
+    const endIndex = startIndex + MEETINGS_PER_PAGE;
+    
+    // Hide all items
+    meetingItems.forEach(item => item.classList.remove('active'));
+    
+    // Show items for current page
+    meetingItems.forEach((item, index) => {
+        if (index >= startIndex && index < endIndex) {
+            item.classList.add('active');
+        }
+    });
+    
+    // Update button states
+    updatePaginationButtons();
+    updatePageInfo();
+    
+    // Scroll to timeline top
+    const timeline = document.getElementById('meetingsTimeline');
+    if (timeline) {
+        timeline.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+}
+
+function changePage(direction) {
+    const newPage = currentPage + direction;
+    if (newPage >= 1 && newPage <= totalPages) {
+        showPage(newPage);
+    }
+}
+
+function goToPage(page) {
+    if (page >= 1 && page <= totalPages) {
+        showPage(page);
+    }
+}
+
+function renderPaginationButtons() {
+    const pagesContainer = document.getElementById('paginationPages');
+    pagesContainer.innerHTML = '';
+    
+    // Determine which page numbers to show
+    let startPage = Math.max(1, currentPage - 2);
+    let endPage = Math.min(totalPages, currentPage + 2);
+    
+    // Adjust if we're near the start or end
+    if (currentPage <= 3) {
+        endPage = Math.min(5, totalPages);
+    }
+    if (currentPage >= totalPages - 2) {
+        startPage = Math.max(1, totalPages - 4);
+    }
+    
+    // Add first page button if not visible
+    if (startPage > 1) {
+        const firstBtn = createPageButton(1);
+        pagesContainer.appendChild(firstBtn);
+        
+        if (startPage > 2) {
+            const ellipsis = document.createElement('span');
+            ellipsis.textContent = '...';
+            ellipsis.style.color = 'var(--text-secondary)';
+            ellipsis.style.padding = '0 0.5rem';
+            pagesContainer.appendChild(ellipsis);
+        }
+    }
+    
+    // Add page buttons
+    for (let i = startPage; i <= endPage; i++) {
+        const pageBtn = createPageButton(i);
+        pagesContainer.appendChild(pageBtn);
+    }
+    
+    // Add last page button if not visible
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+            const ellipsis = document.createElement('span');
+            ellipsis.textContent = '...';
+            ellipsis.style.color = 'var(--text-secondary)';
+            ellipsis.style.padding = '0 0.5rem';
+            pagesContainer.appendChild(ellipsis);
+        }
+        
+        const lastBtn = createPageButton(totalPages);
+        pagesContainer.appendChild(lastBtn);
+    }
+    
+    updatePaginationButtons();
+}
+
+function createPageButton(pageNum) {
+    const btn = document.createElement('button');
+    btn.className = 'page-btn';
+    btn.textContent = pageNum;
+    btn.onclick = () => goToPage(pageNum);
+    return btn;
+}
+
+function updatePaginationButtons() {
+    // Update prev/next button states
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    
+    if (prevBtn) prevBtn.disabled = currentPage === 1;
+    if (nextBtn) nextBtn.disabled = currentPage === totalPages;
+    
+    // Update active page button
+    const pageButtons = document.querySelectorAll('.page-btn');
+    pageButtons.forEach(btn => {
+        const pageNum = parseInt(btn.textContent);
+        if (pageNum === currentPage) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+    
+    // Re-render pagination buttons to update range
+    if (totalPages > 5) {
+        renderPaginationButtons();
+    }
+}
+
+function updatePageInfo() {
+    const pageInfo = document.getElementById('pageInfo');
+    if (pageInfo) {
+        const startItem = totalMeetings > 0 ? ((currentPage - 1) * MEETINGS_PER_PAGE + 1) : 0;
+        const endItem = Math.min(currentPage * MEETINGS_PER_PAGE, totalMeetings);
+        
+        if (totalMeetings > 0) {
+            pageInfo.textContent = `Showing ${startItem}-${endItem} of ${totalMeetings}`;
+        } else {
+            pageInfo.textContent = '';
+        }
+    }
+}
+
+// Initialize pagination when DOM is loaded
+document.addEventListener('DOMContentLoaded', initPagination);
+</script>
+{% endblock %}
+
+{% block mobile_nav %}
+<a href="{{ url_for('main.index') }}" class="nav-link">
+    <i class="fas fa-home"></i>
+    <span>Home</span>
+</a>
+<a href="{{ url_for('main.members') }}" class="nav-link">
+    <i class="fas fa-users"></i>
+    <span>Members</span>
+</a>
+<a href="{{ url_for('main.profile') }}" class="nav-link">
+    <i class="fas fa-user"></i>
+    <span>Profile</span>
+</a>
+<a href="{{ url_for('auth.logout') }}" class="nav-link">
+    <i class="fas fa-sign-out-alt"></i>
+    <span>Logout</span>
+</a>
+{% endblock %}
+
+{% block desktop_nav %}
+<a href="{{ url_for('main.index') }}" class="nav-link">
+    <i class="fas fa-home"></i>
+    <span>Home</span>
+</a>
+<a href="{{ url_for('main.members') }}" class="nav-link">
+    <i class="fas fa-users"></i>
+    <span>Members</span>
+</a>
+<a href="{{ url_for('main.profile') }}" class="nav-link">
+    <i class="fas fa-user"></i>
+    <span>Profile</span>
+</a>
+<a href="{{ url_for('auth.logout') }}" class="nav-link">
+    <i class="fas fa-sign-out-alt"></i>
+    <span>Logout</span>
+</a>
+{% endblock %}

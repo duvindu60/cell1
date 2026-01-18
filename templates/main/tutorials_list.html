@@ -1,0 +1,511 @@
+{% extends "base.html" %}
+{% block title %}Tutorials List - CellApp{% endblock %}
+
+{% block desktop_content %}
+<div class="tutorials-list-page">
+    <!-- Header Section -->
+    <div class="page-header">
+        <div class="header-content">
+            <div class="header-icon">
+                <i class="fas fa-book"></i>
+            </div>
+            <div class="header-text">
+                <h1>Tutorials List</h1>
+                <p>Manage your cell group tutorials</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tutorials List -->
+    <div class="tutorials-list-card">
+        <div class="card-header">
+            <h3><i class="fas fa-list me-2"></i>Tutorials Overview</h3>
+        </div>
+        
+        <div class="tutorials-content">
+            {% if tutorial_list %}
+                <div class="tutorials-grid">
+                    {% for tutorial in tutorial_list %}
+                        <div class="tutorial-item{% if tutorial.is_upcoming %} upcoming-tutorial{% endif %}">
+                            <div class="tutorial-header">
+                                <div class="tutorial-date">
+                                    {{ tutorial.date }}
+                                    {% if tutorial.is_upcoming %}
+                                        <span class="upcoming-badge">Upcoming</span>
+                                    {% endif %}
+                                </div>
+                                <div class="tutorial-status {{ tutorial.status }}">
+                                    {% if tutorial.status == 'updated' %}
+                                        <i class="fas fa-check-circle"></i> Updated
+                                    {% else %}
+                                        <i class="fas fa-exclamation-circle"></i> Not Updated
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="tutorial-info">
+                                {% if tutorial.has_tutorial and not tutorial.is_placeholder %}
+                                    <div class="tutorial-name">{{ tutorial.tutorial_name }}</div>
+                                    {% if tutorial.description %}
+                                        <div class="tutorial-description">{{ tutorial.description }}</div>
+                                    {% endif %}
+                                {% else %}
+                                    <div class="tutorial-name">No Tutorial Uploaded</div>
+                                    <div class="tutorial-description">Tutorial not available for this date</div>
+                                {% endif %}
+                            </div>
+                            <div class="tutorial-actions">
+                                <a href="{{ url_for('main.meeting_tutorials', meeting_date=tutorial.date) }}" class="btn btn-primary">
+                                    <i class="fas fa-eye"></i> View Tutorial
+                                </a>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+                
+                <!-- Pagination Controls -->
+                {% if total_pages > 1 %}
+                <div class="pagination-container">
+                    <div class="pagination">
+                        {% if page > 1 %}
+                            <a href="{{ url_for('main.tutorials_list', page=1) }}" class="page-btn" title="First Page">
+                                <i class="fas fa-angle-double-left"></i>
+                            </a>
+                            <a href="{{ url_for('main.tutorials_list', page=page-1) }}" class="page-btn" title="Previous Page">
+                                <i class="fas fa-angle-left"></i>
+                            </a>
+                        {% else %}
+                            <span class="page-btn disabled">
+                                <i class="fas fa-angle-double-left"></i>
+                            </span>
+                            <span class="page-btn disabled">
+                                <i class="fas fa-angle-left"></i>
+                            </span>
+                        {% endif %}
+                        
+                        <span class="page-info">
+                            Page <strong>{{ page }}</strong> of <strong>{{ total_pages }}</strong>
+                        </span>
+                        
+                        {% if page < total_pages %}
+                            <a href="{{ url_for('main.tutorials_list', page=page+1) }}" class="page-btn" title="Next Page">
+                                <i class="fas fa-angle-right"></i>
+                            </a>
+                            <a href="{{ url_for('main.tutorials_list', page=total_pages) }}" class="page-btn" title="Last Page">
+                                <i class="fas fa-angle-double-right"></i>
+                            </a>
+                        {% else %}
+                            <span class="page-btn disabled">
+                                <i class="fas fa-angle-right"></i>
+                            </span>
+                            <span class="page-btn disabled">
+                                <i class="fas fa-angle-double-right"></i>
+                            </span>
+                        {% endif %}
+                    </div>
+                    <div class="pagination-summary">
+                        Showing {{ (page-1)*5 + 1 }} to {{ [page*5, total_tutorials]|min }} of {{ total_tutorials }} tutorials
+                    </div>
+                </div>
+                {% endif %}
+            {% else %}
+                <div class="empty-state">
+                    <div class="empty-state-icon">
+                        <i class="fas fa-book"></i>
+                    </div>
+                    <h3>No Tutorials Available</h3>
+                    <p>No tutorials have been uploaded yet.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block desktop_nav %}
+<a href="{{ url_for('main.index') }}" class="nav-link active">
+    <i class="fas fa-home"></i>
+    <span>Home</span>
+</a>
+<a href="{{ url_for('main.members') }}" class="nav-link">
+    <i class="fas fa-users"></i>
+    <span>Members</span>
+</a>
+<a href="{{ url_for('main.profile') }}" class="nav-link">
+    <i class="fas fa-user"></i>
+    <span>Profile</span>
+</a>
+<a href="{{ url_for('auth.logout') }}" class="nav-link">
+    <i class="fas fa-sign-out-alt"></i>
+    <span>Logout</span>
+</a>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ===========================================
+   TUTORIALS LIST DESKTOP STYLING
+   =========================================== */
+
+.tutorials-list-page {
+    background: #0f172a;
+    min-height: 100vh;
+    padding: 2rem;
+    color: white;
+}
+
+.page-header {
+    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+    border-radius: 16px;
+    border: 1px solid #475569;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.header-content {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.header-icon {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    color: white;
+    box-shadow: 0 8px 24px rgba(245, 158, 11, 0.3);
+}
+
+.header-text h1 {
+    color: white;
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin: 0 0 0.5rem 0;
+}
+
+.header-text p {
+    color: #94a3b8;
+    font-size: 1.2rem;
+    margin: 0;
+}
+
+.tutorials-list-card {
+    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+    border: 1px solid #475569;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.card-header {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 2rem;
+    border-bottom: 1px solid #475569;
+}
+
+.card-header h3 {
+    color: white;
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 0;
+    display: flex;
+    align-items: center;
+}
+
+.tutorials-content {
+    padding: 2rem;
+}
+
+.tutorials-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+}
+
+.tutorial-item {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 2rem;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.tutorial-item.upcoming-tutorial {
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    box-shadow: 0 4px 16px rgba(59, 130, 246, 0.2);
+}
+
+.tutorial-item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #3b82f6, #1d4ed8);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.tutorial-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateY(-4px);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+}
+
+.tutorial-item:hover::before {
+    opacity: 1;
+}
+
+.tutorial-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.tutorial-date {
+    color: #3b82f6;
+    font-size: 1.2rem;
+    font-weight: 600;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.upcoming-badge {
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    color: white;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.3rem 0.6rem;
+    border-radius: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    align-self: flex-start;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+    }
+    50% {
+        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.6);
+    }
+    100% {
+        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+    }
+}
+
+.tutorial-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+}
+
+.tutorial-status.updated {
+    background: rgba(16, 185, 129, 0.2);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.tutorial-status.not_updated {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.tutorial-info {
+    margin-bottom: 1.5rem;
+}
+
+.tutorial-name {
+    color: white;
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.tutorial-description {
+    color: #94a3b8;
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+.tutorial-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    text-decoration: none;
+    font-size: 0.95rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    border: none;
+    cursor: pointer;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    color: white;
+    box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #1d4ed8, #1e40af);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4);
+    text-decoration: none;
+    color: white;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: #94a3b8;
+    grid-column: span 2;
+}
+
+.empty-state-icon {
+    font-size: 4rem;
+    margin-bottom: 1.5rem;
+    opacity: 0.5;
+}
+
+.empty-state h3 {
+    color: white;
+    font-size: 1.5rem;
+    margin: 0 0 0.75rem 0;
+}
+
+.empty-state p {
+    margin: 0;
+    font-size: 1rem;
+}
+
+/* Pagination Styles */
+.pagination-container {
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 1px solid #475569;
+}
+
+.pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.page-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.page-btn:hover:not(.disabled) {
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    border-color: #3b82f6;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.page-btn.disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.page-info {
+    padding: 0.5rem 1.5rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    color: #94a3b8;
+    font-size: 0.95rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.page-info strong {
+    color: #3b82f6;
+    font-weight: 600;
+}
+
+.pagination-summary {
+    text-align: center;
+    color: #94a3b8;
+    font-size: 0.9rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+    .tutorials-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .tutorials-list-page {
+        padding: 1rem;
+    }
+    
+    .page-header {
+        padding: 1.5rem;
+    }
+    
+    .header-content {
+        flex-direction: column;
+        text-align: center;
+        gap: 1rem;
+    }
+    
+    .header-icon {
+        width: 60px;
+        height: 60px;
+        font-size: 24px;
+    }
+    
+    .header-text h1 {
+        font-size: 2rem;
+    }
+    
+    .tutorials-content {
+        padding: 1rem;
+    }
+    
+    .tutorial-item {
+        padding: 1.5rem;
+    }
+}
+</style>
+{% endblock %}

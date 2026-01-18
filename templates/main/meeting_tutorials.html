@@ -1,0 +1,251 @@
+{% extends "base.html" %}
+{% import 'macros/components.html' as components %}
+{% block title %}Meeting Tutorials - {{ meeting_date }}{% endblock %}
+{% block mobile_content %}
+{% endblock %}
+{% block desktop_content %}
+<div class="page-container">
+    <div class="page-header">
+        <div class="feature-icon">
+            {% if is_latest %}
+                <i class="fas fa-book"></i>
+            {% else %}
+                <i class="fas fa-calendar-day"></i>
+            {% endif %}
+        </div>
+        <h2>{{ meeting_date }}</h2>
+        {% if is_latest %}
+            <p>Latest Tutorial Available</p>
+        {% elif is_next_week %}
+            <p>Next Week Meeting</p>
+        {% else %}
+            <p>Cell Meeting Tutorials & Guidelines</p>
+        {% endif %}
+    </div>
+<!-- Tutorials Grid -->
+{% if tutorials %}
+    <div class="row g-4">
+        {% for tutorial in tutorials %}
+        <div class="col-md-6">
+            {% set pdf_url = tutorial.file_url or tutorial.pdf_url or tutorial.url or tutorial.file_path %}
+            {% if pdf_url and pdf_url|trim|length > 0 %}
+            <a href="{{ pdf_url }}" target="_blank" rel="noopener noreferrer" class="tutorial-link">
+            {% endif %}
+            <div class="tutorial-card-desktop">
+                <div class="tutorial-header">
+                    <div class="tutorial-icon">
+                        <i class="fas fa-file-pdf"></i>
+                    </div>
+                    <div class="tutorial-info">
+                        <h3>{{ tutorial.tutorial_name or 'Tutorial' }}</h3>
+                        <p class="tutorial-date">{{ tutorial.meeting_date }}</p>
+                    </div>
+                </div>
+                {% if tutorial.description %}
+                <div class="tutorial-description">
+                    <p>{{ tutorial.description }}</p>
+                </div>
+                {% endif %}
+                <div class="tutorial-footer">
+                    <small class="text-muted">
+                        Uploaded: {{ tutorial.uploaded_at[:19].replace('T', ' at ') if tutorial.uploaded_at else 'Recently' }}
+                    </small>
+                </div>
+            </div>
+            {% if pdf_url %}
+            </a>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="feature-card text-center" style="padding: 4rem 2rem;">
+        <div class="feature-icon mx-auto mb-4" style="width: 100px; height: 100px; font-size: 40px; background: linear-gradient(135deg, #6c757d, #adb5bd); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+            <i class="fas fa-exclamation-triangle"></i>
+        </div>
+        <h2>No Tutorials Yet</h2>
+        <p class="text-muted mb-0" style="font-size: 1.1rem;">No tutorials have been uploaded for this meeting date yet.</p>
+        {% if is_next_week %}
+        <p class="text-muted mt-2" style="font-size: 1rem;">This is the next week's meeting date.</p>
+        {% endif %}
+    </div>
+{% endif %}
+<!-- Back Button -->
+<div class="text-center mt-5">
+    <a href="{{ url_for('main.index') }}" class="btn btn-primary btn-lg">
+        <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+    </a>
+</div>
+{% endblock %}
+{% block extra_css %}
+<style>
+/* Meeting Tutorials Page Container */
+.meeting-tutorials-page {
+    padding: 1rem;
+    padding-bottom: 6rem; /* Add extra padding to prevent content from being cut off by fixed bottom nav */
+    min-height: 100vh;
+    background: #0f172a;
+}
+
+/* Tutorial Card Styling */
+.tutorial-card-mobile,
+.tutorial-card-desktop {
+    background: linear-gradient(135deg, #21262d 0%, #161b22 100%);
+    border: 1px solid #30363d;
+    border-radius: 16px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    transition: all 0.3s ease;
+    margin-bottom: 1rem;
+}
+
+.tutorial-card-mobile:hover,
+.tutorial-card-desktop:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    border-color: #1F6FEB;
+}
+
+.tutorial-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.tutorial-icon {
+    width: 50px;
+    height: 50px;
+    background: linear-gradient(135deg, #1F6FEB, #2c7bb6);
+    color: white;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    box-shadow: 0 4px 16px rgba(31, 111, 235, 0.3);
+    flex-shrink: 0;
+}
+
+.tutorial-info h3 {
+    color: #f0f6fc;
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin: 0 0 0.25rem 0;
+}
+
+.tutorial-date {
+    color: #8b949e;
+    font-size: 0.9rem;
+    margin: 0;
+    font-weight: 500;
+}
+
+.tutorial-description {
+    margin-bottom: 1rem;
+}
+
+.tutorial-description p {
+    color: #f0f6fc;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.tutorial-footer {
+    border-top: 1px solid #30363d;
+    padding-top: 0.75rem;
+}
+
+.tutorial-footer small {
+    color: #8b949e;
+    font-size: 0.8rem;
+}
+
+.tutorial-link {
+    text-decoration: none;
+    color: inherit;
+    display: block;
+}
+
+.tutorial-link:hover {
+    text-decoration: none;
+    color: inherit;
+}
+
+.tutorial-link .tutorial-card-desktop {
+    cursor: pointer;
+}
+
+.tutorial-link:hover .tutorial-card-desktop {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    border-color: #1F6FEB;
+}
+
+
+/* Desktop specific improvements */
+@media (min-width: 992px) {
+    .tutorial-card-desktop {
+        margin-bottom: 1.5rem;
+        padding: 2rem;
+    }
+    
+    .tutorial-header {
+        gap: 1.25rem;
+    }
+    
+    .tutorial-icon {
+        width: 60px;
+        height: 60px;
+        font-size: 24px;
+    }
+    
+    .tutorial-info h3 {
+        font-size: 1.3rem;
+    }
+    
+    .tutorial-date {
+        font-size: 1rem;
+    }
+}
+</style>
+{% endblock %}
+
+{% block mobile_nav %}
+<a href="{{ url_for('main.index') }}" class="nav-link active">
+    <i class="fas fa-home"></i>
+    <span>Home</span>
+</a>
+<a href="{{ url_for('main.members') }}" class="nav-link">
+    <i class="fas fa-users"></i>
+    <span>Members</span>
+</a>
+<a href="{{ url_for('main.profile') }}" class="nav-link">
+    <i class="fas fa-user"></i>
+    <span>Profile</span>
+</a>
+<a href="{{ url_for('auth.logout') }}" class="nav-link">
+    <i class="fas fa-sign-out-alt"></i>
+    <span>Logout</span>
+</a>
+{% endblock %}
+
+{% block desktop_nav %}
+<a href="{{ url_for('main.index') }}" class="nav-link active">
+    <i class="fas fa-home"></i>
+    <span>Home</span>
+</a>
+<a href="{{ url_for('main.members') }}" class="nav-link">
+    <i class="fas fa-users"></i>
+    <span>Members</span>
+</a>
+<a href="{{ url_for('main.profile') }}" class="nav-link">
+    <i class="fas fa-user"></i>
+    <span>Profile</span>
+</a>
+<a href="{{ url_for('auth.logout') }}" class="nav-link">
+    <i class="fas fa-sign-out-alt"></i>
+    <span>Logout</span>
+</a>
+{% endblock %}

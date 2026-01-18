@@ -1,0 +1,634 @@
+{% extends "base.html" %}
+{% block title %}Attendance List - CellApp{% endblock %}
+
+{% block desktop_content %}
+<div class="attendance-list-page">
+    <!-- Header Section -->
+    <div class="page-header">
+        <div class="header-content">
+            <div class="header-icon">
+                <i class="fas fa-user-check"></i>
+            </div>
+            <div class="header-text">
+                <h1>Attendance List</h1>
+                <p>View attendance records and completion status</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs Navigation -->
+    <div class="attendance-tabs-container">
+        <ul class="nav nav-tabs" id="attendanceTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="unmarked-tab" data-bs-toggle="tab" data-bs-target="#unmarked" type="button" role="tab">
+                    <i class="fas fa-clock me-2"></i>Unmarked
+                    <span class="badge bg-warning ms-2">{{ unmarked_list|length }}</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="marked-tab" data-bs-toggle="tab" data-bs-target="#marked" type="button" role="tab">
+                    <i class="fas fa-check-circle me-2"></i>Marked
+                    <span class="badge bg-success ms-2">{{ marked_list|length }}</span>
+                </button>
+            </li>
+        </ul>
+    </div>
+
+    <!-- Tab Content -->
+    <div class="tab-content" id="attendanceTabContent">
+        <!-- Unmarked Tab -->
+        <div class="tab-pane fade show active" id="unmarked" role="tabpanel">
+            <div class="attendance-list-card">
+                <div class="card-header">
+                    <h3><i class="fas fa-clock me-2"></i>Incomplete Attendance</h3>
+                </div>
+                
+                <div class="attendance-content">
+                    {% if unmarked_list %}
+                <div class="attendance-grid">
+                    {% for attendance in unmarked_list %}
+                        <div class="attendance-item {% if attendance.is_upcoming %}upcoming-meeting{% endif %}">
+                            <div class="attendance-header">
+                                <div class="attendance-date">
+                                    {% if attendance.is_upcoming %}
+                                        <i class="fas fa-calendar-star me-2" style="color: #3b82f6;"></i>
+                                        <span style="color: #3b82f6; font-weight: 700;">Upcoming Meeting</span>
+                                        <br>
+                                        <span style="font-size: 0.9rem; color: #94a3b8; font-weight: normal;">{{ attendance.date }}</span>
+                                    {% else %}
+                                        {{ attendance.date }}
+                                    {% endif %}
+                                </div>
+                                <div class="attendance-status {{ attendance.status }}">
+                                    {% if attendance.is_upcoming %}
+                                        <span class="badge" style="background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: white; padding: 0.5rem 1rem; border-radius: 20px; font-weight: 600;">
+                                            <i class="fas fa-star"></i> Upcoming
+                                        </span>
+                                    {% elif attendance.status == 'complete' %}
+                                        <i class="fas fa-check-circle"></i> Complete
+                                    {% elif attendance.status == 'partial' %}
+                                        <i class="fas fa-exclamation-triangle"></i> Partial
+                                    {% else %}
+                                        <i class="fas fa-times-circle"></i> Incomplete
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="attendance-info">
+                                <div class="attendance-count">{{ attendance.count }}/{{ attendance.total }} Members</div>
+                                <div class="attendance-progress">
+                                    {% set percentage = (attendance.count / attendance.total * 100) if attendance.total > 0 else 0 %}
+                                    <div class="progress-bar">
+                                        <div class="progress-fill" style="--progress-width: {{ percentage }}%; width: var(--progress-width);"></div>
+                                    </div>
+                                    <div class="progress-text">{{ "%.0f"|format(percentage) }}% Complete</div>
+                                </div>
+                            </div>
+                            <div class="attendance-actions">
+                                {% if not attendance.is_upcoming %}
+                                <a href="{{ url_for('main.attendance_detail', meeting_date=attendance.date) }}" class="btn btn-primary">
+                                    <i class="fas fa-edit"></i> Mark Attendance
+                                </a>
+                                {% else %}
+                                <div class="btn btn-secondary" style="opacity: 0.6; cursor: not-allowed; background: #475569; color: #94a3b8;">
+                                    <i class="fas fa-lock"></i> Available on Meeting Day
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+                    {% else %}
+                        <div class="empty-state">
+                            <div class="empty-state-icon">
+                                <i class="fas fa-check-double"></i>
+                            </div>
+                            <h3>All Caught Up!</h3>
+                            <p>All meetings have complete attendance records.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Marked Tab -->
+        <div class="tab-pane fade" id="marked" role="tabpanel">
+            <div class="attendance-list-card">
+                <div class="card-header">
+                    <h3><i class="fas fa-check-circle me-2"></i>Complete Attendance</h3>
+                </div>
+                
+                <div class="attendance-content">
+                    {% if marked_list %}
+                        <div class="attendance-grid">
+                            {% for attendance in marked_list %}
+                                <div class="attendance-item">
+                                    <div class="attendance-header">
+                                        <div class="attendance-date">
+                                            {{ attendance.date }}
+                                        </div>
+                                        <div class="attendance-status complete">
+                                            <i class="fas fa-check-circle"></i> Complete
+                                        </div>
+                                    </div>
+                                    <div class="attendance-info">
+                                        <div class="attendance-count">{{ attendance.count }}/{{ attendance.total }} Members</div>
+                                        <div class="attendance-summary" style="display: flex; gap: 1rem; margin-top: 0.5rem; font-size: 0.9rem;">
+                                            <span style="color: #10b981;"><i class="fas fa-check"></i> Present: {{ attendance.present_count }}</span>
+                                            <span style="color: #ef4444;"><i class="fas fa-times"></i> Absent: {{ attendance.absent_count }}</span>
+                                        </div>
+                                    </div>
+                                    <div class="attendance-actions">
+                                        <a href="{{ url_for('main.attendance_detail', meeting_date=attendance.date) }}" class="btn btn-primary">
+                                            <i class="fas fa-eye"></i> View Details
+                                        </a>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                        
+                        <!-- Pagination Controls -->
+                        {% if total_marked_pages > 1 %}
+                        <div class="pagination-container">
+                            <div class="pagination">
+                                {% if marked_page > 1 %}
+                                    <a href="{{ url_for('main.attendance_list', marked_page=1) }}#marked" class="page-btn" title="First Page">
+                                        <i class="fas fa-angle-double-left"></i>
+                                    </a>
+                                    <a href="{{ url_for('main.attendance_list', marked_page=marked_page-1) }}#marked" class="page-btn" title="Previous Page">
+                                        <i class="fas fa-angle-left"></i>
+                                    </a>
+                                {% else %}
+                                    <span class="page-btn disabled">
+                                        <i class="fas fa-angle-double-left"></i>
+                                    </span>
+                                    <span class="page-btn disabled">
+                                        <i class="fas fa-angle-left"></i>
+                                    </span>
+                                {% endif %}
+                                
+                                <span class="page-info">
+                                    Page <strong>{{ marked_page }}</strong> of <strong>{{ total_marked_pages }}</strong>
+                                </span>
+                                
+                                {% if marked_page < total_marked_pages %}
+                                    <a href="{{ url_for('main.attendance_list', marked_page=marked_page+1) }}#marked" class="page-btn" title="Next Page">
+                                        <i class="fas fa-angle-right"></i>
+                                    </a>
+                                    <a href="{{ url_for('main.attendance_list', marked_page=total_marked_pages) }}#marked" class="page-btn" title="Last Page">
+                                        <i class="fas fa-angle-double-right"></i>
+                                    </a>
+                                {% else %}
+                                    <span class="page-btn disabled">
+                                        <i class="fas fa-angle-right"></i>
+                                    </span>
+                                    <span class="page-btn disabled">
+                                        <i class="fas fa-angle-double-right"></i>
+                                    </span>
+                                {% endif %}
+                            </div>
+                            <div class="pagination-summary">
+                                Showing {{ (marked_page-1)*5 + 1 }} to {{ [marked_page*5, total_marked]|min }} of {{ total_marked }} complete meetings
+                            </div>
+                        </div>
+                        {% endif %}
+                    {% else %}
+                        <div class="empty-state">
+                            <div class="empty-state-icon">
+                                <i class="fas fa-calendar-times"></i>
+                            </div>
+                            <h3>No Complete Meetings</h3>
+                            <p>No meetings with complete attendance records found.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block desktop_nav %}
+<a href="{{ url_for('main.index') }}" class="nav-link active">
+    <i class="fas fa-home"></i>
+    <span>Home</span>
+</a>
+<a href="{{ url_for('main.members') }}" class="nav-link">
+    <i class="fas fa-users"></i>
+    <span>Members</span>
+</a>
+<a href="{{ url_for('main.profile') }}" class="nav-link">
+    <i class="fas fa-user"></i>
+    <span>Profile</span>
+</a>
+<a href="{{ url_for('auth.logout') }}" class="nav-link">
+    <i class="fas fa-sign-out-alt"></i>
+    <span>Logout</span>
+</a>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ===========================================
+   ATTENDANCE LIST DESKTOP STYLING
+   =========================================== */
+
+.attendance-list-page {
+    background: #0f172a;
+    min-height: 100vh;
+    padding: 2rem;
+    color: white;
+}
+
+.page-header {
+    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+    border-radius: 16px;
+    border: 1px solid #475569;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.header-content {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.header-icon {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    color: white;
+    box-shadow: 0 8px 24px rgba(239, 68, 68, 0.3);
+}
+
+.header-text h1 {
+    color: white;
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin: 0 0 0.5rem 0;
+}
+
+.header-text p {
+    color: #94a3b8;
+    font-size: 1.2rem;
+    margin: 0;
+}
+
+.attendance-list-card {
+    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+    border: 1px solid #475569;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.card-header {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 2rem;
+    border-bottom: 1px solid #475569;
+}
+
+.card-header h3 {
+    color: white;
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 0;
+    display: flex;
+    align-items: center;
+}
+
+.attendance-content {
+    padding: 2rem;
+}
+
+.attendance-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+}
+
+.attendance-item {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 2rem;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.attendance-item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #10b981, #059669);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.attendance-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateY(-4px);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+}
+
+.attendance-item.upcoming-meeting {
+    border: 2px solid #3b82f6;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(29, 78, 216, 0.1) 100%);
+}
+
+.attendance-item.upcoming-meeting::before {
+    background: linear-gradient(90deg, #3b82f6, #1d4ed8);
+    opacity: 1;
+}
+
+.attendance-item:hover::before {
+    opacity: 1;
+}
+
+.attendance-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.attendance-date {
+    color: #3b82f6;
+    font-size: 1.2rem;
+    font-weight: 600;
+}
+
+.attendance-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+}
+
+.attendance-status.complete {
+    background: rgba(16, 185, 129, 0.2);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.attendance-status.partial {
+    background: rgba(245, 158, 11, 0.2);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.attendance-status.incomplete {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.attendance-info {
+    margin-bottom: 1.5rem;
+}
+
+.attendance-count {
+    color: white;
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+}
+
+.attendance-progress {
+    margin-bottom: 0.5rem;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #10b981, #059669);
+    border-radius: 6px;
+    transition: width 0.3s ease;
+}
+
+.progress-text {
+    color: #94a3b8;
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+.attendance-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    text-decoration: none;
+    font-size: 0.95rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    border: none;
+    cursor: pointer;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    color: white;
+    box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #1d4ed8, #1e40af);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4);
+    text-decoration: none;
+    color: white;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: #94a3b8;
+    grid-column: span 2;
+}
+
+.empty-state-icon {
+    font-size: 4rem;
+    margin-bottom: 1.5rem;
+    opacity: 0.5;
+}
+
+.empty-state h3 {
+    color: white;
+    font-size: 1.5rem;
+    margin: 0 0 0.75rem 0;
+}
+
+.empty-state p {
+    margin: 0;
+    font-size: 1rem;
+}
+
+/* Tabs Styling */
+.attendance-tabs-container {
+    margin: 2rem 0 1rem;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.attendance-tabs-container .nav-tabs {
+    border-bottom: none;
+}
+
+.attendance-tabs-container .nav-link {
+    color: #94a3b8;
+    font-weight: 500;
+    padding: 1rem 1.5rem;
+    border: none;
+    border-bottom: 3px solid transparent;
+    background: transparent;
+}
+
+.attendance-tabs-container .nav-link:hover {
+    color: #3b82f6;
+    border-bottom-color: rgba(59, 130, 246, 0.3);
+}
+
+.attendance-tabs-container .nav-link.active {
+    color: #3b82f6;
+    background: transparent;
+    border-bottom-color: #3b82f6;
+}
+
+.attendance-tabs-container .badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+}
+
+/* Pagination Styles */
+.pagination-container {
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 1px solid #475569;
+}
+
+.pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.page-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.page-btn:hover:not(.disabled) {
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    border-color: #3b82f6;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.page-btn.disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.page-info {
+    padding: 0.5rem 1.5rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    color: #94a3b8;
+    font-size: 0.95rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.page-info strong {
+    color: #3b82f6;
+    font-weight: 600;
+}
+
+.pagination-summary {
+    text-align: center;
+    color: #94a3b8;
+    font-size: 0.9rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+    .attendance-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .attendance-list-page {
+        padding: 1rem;
+    }
+    
+    .page-header {
+        padding: 1.5rem;
+    }
+    
+    .header-content {
+        flex-direction: column;
+        text-align: center;
+        gap: 1rem;
+    }
+    
+    .header-icon {
+        width: 60px;
+        height: 60px;
+        font-size: 24px;
+    }
+    
+    .header-text h1 {
+        font-size: 2rem;
+    }
+    
+    .attendance-content {
+        padding: 1rem;
+    }
+    
+    .attendance-item {
+        padding: 1.5rem;
+    }
+}
+</style>
+{% endblock %}
