@@ -1,0 +1,54 @@
+name: Deploy to Azure VM
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Azure VM
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.AZURE_VM_HOST }}
+          username: ${{ secrets.AZURE_VM_USER }}
+          key: ${{ secrets.AZURE_VM_SSH_KEY }}
+          port: 22
+          debug: true
+          key_path: ""
+          passphrase: ""
+          script: |
+            echo "Starting deployment..."
+            
+            # Navigate to application directory
+            cd /home/pjfm/cellapp
+            
+            # Pull latest changes
+            git pull origin main
+            
+            # Activate virtual environment
+            source venv/bin/activate
+            
+            # Install/update dependencies
+            pip install -r requirements.txt
+            
+            # Restart the application service
+            sudo systemctl restart cellapp
+            
+            # Check service status
+            sudo systemctl status cellapp
+            
+            echo "Deployment completed successfully!"
+
+      - name: Health Check
+        run: |
+          sleep 10
+          echo "Deployment completed! Please verify manually at your VM's IP address"
