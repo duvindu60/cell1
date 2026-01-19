@@ -1297,6 +1297,28 @@ def member_form():
     except Exception as e:
         print(f"Error fetching leader's branch_id and country: {e}")
     
+    # Fetch zones from zones table with sector_number from sectors table
+    zones = []
+    try:
+        # Fetch zones with sector information
+        zones_result = supabase.table('zones').select('*').order('id').execute()
+        if zones_result.data:
+            # For each zone, fetch the sector_number from sectors table if sector_id exists
+            for zone in zones_result.data:
+                sector_number = None
+                if zone.get('sector_id'):
+                    try:
+                        sector_result = supabase.table('sectors').select('sector_number').eq('id', zone['sector_id']).limit(1).execute()
+                        if sector_result.data and len(sector_result.data) > 0:
+                            sector_number = sector_result.data[0].get('sector_number')
+                    except Exception as e:
+                        print(f"Error fetching sector for zone {zone.get('id')}: {e}")
+                # Add sector_number to zone data
+                zone['sector_number'] = sector_number
+                zones.append(zone)
+    except Exception as e:
+        print(f"Error fetching zones: {e}")
+    
     # Check if editing an existing member
     member_id = request.args.get('edit')
     member = None
@@ -1314,7 +1336,8 @@ def member_form():
                          member=member, 
                          is_edit=bool(member_id),
                          leader_branch_id=leader_branch_id,
-                         leader_country=leader_country)
+                         leader_country=leader_country,
+                         zones=zones)
 @main_bp.route('/member/<member_id>')
 def member_details(member_id):
     if 'user' not in session:
@@ -1330,6 +1353,20 @@ def member_details(member_id):
         
         if result.data:
             member = result.data[0]
+            
+            # Fetch zone name if zone_id exists
+            zone_name = None
+            if member.get('zone_id'):
+                try:
+                    zone_result = supabase.table('zones').select('name').eq('id', member['zone_id']).limit(1).execute()
+                    if zone_result.data and len(zone_result.data) > 0:
+                        zone_name = zone_result.data[0].get('name')
+                except Exception as e:
+                    print(f"Error fetching zone name: {e}")
+            
+            # Add zone_name to member data for template
+            member['zone_name'] = zone_name
+            
             template_name = f'main/member_details{get_template_suffix()}.html'
             return render_template(template_name, member=member, user=session['user'])
         else:
@@ -1378,12 +1415,34 @@ def add_member():
         except Exception as e:
             print(f"Error fetching leader's branch_id and country: {e}")
         
+        # Fetch zones for error case with sector_number from sectors table
+        zones = []
+        try:
+            zones_result = supabase.table('zones').select('*').order('id').execute()
+            if zones_result.data:
+                # For each zone, fetch the sector_number from sectors table if sector_id exists
+                for zone in zones_result.data:
+                    sector_number = None
+                    if zone.get('sector_id'):
+                        try:
+                            sector_result = supabase.table('sectors').select('sector_number').eq('id', zone['sector_id']).limit(1).execute()
+                            if sector_result.data and len(sector_result.data) > 0:
+                                sector_number = sector_result.data[0].get('sector_number')
+                        except Exception as e:
+                            print(f"Error fetching sector for zone {zone.get('id')}: {e}")
+                    # Add sector_number to zone data
+                    zone['sector_number'] = sector_number
+                    zones.append(zone)
+        except Exception as e:
+            print(f"Error fetching zones: {e}")
+        
         template_name = f'main/member_form{get_template_suffix()}.html'
         return render_template(template_name, 
                              user=session['user'], 
                              form_errors=form_errors,
                              leader_branch_id=leader_branch_id,
-                             leader_country=leader_country)
+                             leader_country=leader_country,
+                             zones=zones)
     try:
         # Use the user ID directly as leader_id (since role_id = 4 users ARE leaders)
         leader_id = session['user']['id']
@@ -1404,6 +1463,26 @@ def add_member():
         branch_id = request.form.get('branch_id') or leader_branch_id
         cell_category = request.form.get('cell_category') or None
         church = request.form.get('church') == 'true'  # Convert checkbox to boolean
+        potential_leader = request.form.get('potential_leader') == 'true'  # Convert checkbox to boolean
+        
+        # Get zone_id and sector_number - convert empty strings to None
+        zone_id = request.form.get('zone_id', '').strip()
+        if zone_id:
+            try:
+                zone_id = int(zone_id)
+            except (ValueError, TypeError):
+                zone_id = None
+        else:
+            zone_id = None
+        
+        sector_number = request.form.get('sector_number', '').strip()
+        if sector_number:
+            try:
+                sector_number = int(sector_number)
+            except (ValueError, TypeError):
+                sector_number = None
+        else:
+            sector_number = None
         
         # Prepare member data
         member_data = {
@@ -1412,11 +1491,15 @@ def add_member():
             'age': int(age) if age else None,
             'gender': request.form.get('gender') or None,
             'phone_number': phone_number or None,
-            'zone': request.form.get('zone') or None,
+            'zone_id': zone_id,
             'country': country,
             'branch_id': branch_id,
             'cell_category': cell_category,
-            'church': church
+            'church': church,
+            'potential_leader': potential_leader,
+            'sector_number': sector_number,
+            'district': request.form.get('district') or None,
+            'province': request.form.get('province') or None
         }
         # Insert into database
         print(f"Attempting to insert member with leader_id: {leader_id}")
@@ -1456,12 +1539,22 @@ def add_member():
             except Exception as e:
                 print(f"Error fetching leader's branch_id and country: {e}")
             
+            # Fetch zones for error case
+            zones = []
+            try:
+                zones_result = supabase.table('zones').select('*').order('id').execute()
+                if zones_result.data:
+                    zones = zones_result.data
+            except Exception as e:
+                print(f"Error fetching zones: {e}")
+            
             template_name = f'main/member_form{get_template_suffix()}.html'
             return render_template(template_name, 
                                  user=session['user'], 
                                  form_errors={'general': 'Failed to add member to database'},
                                  leader_branch_id=leader_branch_id,
-                                 leader_country=leader_country)
+                                 leader_country=leader_country,
+                                 zones=zones)
     except Exception as e:
         error_msg = str(e)
         flash(f'Error adding member: {error_msg}', 'error')
@@ -1477,12 +1570,34 @@ def add_member():
         except Exception as e:
             print(f"Error fetching leader's branch_id and country: {e}")
         
+        # Fetch zones for error case with sector_number from sectors table
+        zones = []
+        try:
+            zones_result = supabase.table('zones').select('*').order('id').execute()
+            if zones_result.data:
+                # For each zone, fetch the sector_number from sectors table if sector_id exists
+                for zone in zones_result.data:
+                    sector_number = None
+                    if zone.get('sector_id'):
+                        try:
+                            sector_result = supabase.table('sectors').select('sector_number').eq('id', zone['sector_id']).limit(1).execute()
+                            if sector_result.data and len(sector_result.data) > 0:
+                                sector_number = sector_result.data[0].get('sector_number')
+                        except Exception as e:
+                            print(f"Error fetching sector for zone {zone.get('id')}: {e}")
+                    # Add sector_number to zone data
+                    zone['sector_number'] = sector_number
+                    zones.append(zone)
+        except Exception as e:
+            print(f"Error fetching zones: {e}")
+        
         template_name = f'main/member_form{get_template_suffix()}.html'
         return render_template(template_name, 
                              user=session['user'], 
                              form_errors={'general': error_msg},
                              leader_branch_id=leader_branch_id,
-                             leader_country=leader_country)
+                             leader_country=leader_country,
+                             zones=zones)
 @main_bp.route('/update_member/<member_id>', methods=['POST'])
 def update_member(member_id):
     if 'user' not in session:
@@ -1507,17 +1622,41 @@ def update_member(member_id):
         branch_id = request.form.get('branch_id') or leader_branch_id
         cell_category = request.form.get('cell_category') or None
         church = request.form.get('church') == 'true'  # Convert checkbox to boolean
+        potential_leader = request.form.get('potential_leader') == 'true'  # Convert checkbox to boolean
+        
+        # Get zone_id and sector_number - convert empty strings to None
+        zone_id = request.form.get('zone_id', '').strip()
+        if zone_id:
+            try:
+                zone_id = int(zone_id)
+            except (ValueError, TypeError):
+                zone_id = None
+        else:
+            zone_id = None
+        
+        sector_number = request.form.get('sector_number', '').strip()
+        if sector_number:
+            try:
+                sector_number = int(sector_number)
+            except (ValueError, TypeError):
+                sector_number = None
+        else:
+            sector_number = None
         
         member_data = {
             'name': request.form.get('name'),
             'age': int(request.form.get('age')) if request.form.get('age') else None,
             'gender': request.form.get('gender') or None,
             'phone_number': request.form.get('phone_number') or None,
-            'zone': request.form.get('zone') or None,
+            'zone_id': zone_id,
             'country': country,
             'branch_id': branch_id,
             'cell_category': cell_category,
-            'church': church
+            'church': church,
+            'potential_leader': potential_leader,
+            'sector_number': sector_number,
+            'district': request.form.get('district') or None,
+            'province': request.form.get('province') or None
         }
         result = supabase.table('cell_members').update(member_data).eq('id', member_id).eq('leader_id', leader_id).execute()
         # Log activity

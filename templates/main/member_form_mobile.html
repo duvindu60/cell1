@@ -91,19 +91,68 @@
                 {% endif %}
             </div>
             
-            <!-- Zone - Optional Field -->
+            <!-- Zone - Dropdown from zones table -->
             <div class="form-group">
-                <label for="zone" class="form-label">
+                <label for="zone_id" class="form-label">
                     <i class="fas fa-map-marker-alt"></i>Zone
                 </label>
-                <select id="zone" name="zone" class="form-select">
+                <select id="zone_id" name="zone_id" class="form-select">
                     <option value="">Select zone</option>
-                    <option value="Zone A" {{ 'selected' if request.form.zone == 'Zone A' or (member and member.zone == 'Zone A') else '' }}>Zone A</option>
-                    <option value="Zone B" {{ 'selected' if request.form.zone == 'Zone B' or (member and member.zone == 'Zone B') else '' }}>Zone B</option>
-                    <option value="Zone C" {{ 'selected' if request.form.zone == 'Zone C' or (member and member.zone == 'Zone C') else '' }}>Zone C</option>
-                    <option value="Zone D" {{ 'selected' if request.form.zone == 'Zone D' or (member and member.zone == 'Zone D') else '' }}>Zone D</option>
+                    {% if zones %}
+                        {% for zone in zones %}
+                            <option value="{{ zone.id }}" 
+                                    data-sector="{{ zone.sector_number if zone.sector_number is not none else '' }}"
+                                    {{ 'selected' if (request.form.zone_id == zone.id|string) or (member and member.zone_id == zone.id) else '' }}>
+                                {{ zone.name if zone.name else 'Zone ' ~ zone.id|string }}
+                            </option>
+                        {% endfor %}
+                    {% endif %}
                 </select>
                 <div class="form-help">Optional - Select zone</div>
+            </div>
+
+            <!-- Sector Number - Auto-filled from Zone -->
+            <div class="form-group">
+                <label for="sector_number" class="form-label">
+                    <i class="fas fa-hashtag"></i>Sector Number
+                </label>
+                <input type="number" 
+                       id="sector_number" 
+                       name="sector_number" 
+                       readonly
+                       value="{{ request.form.sector_number if request.form.sector_number else (member.sector_number if member and member.sector_number else '') }}"
+                       class="form-input"
+                       style="background: #161b22; color: #8b949e; cursor: not-allowed;"
+                       placeholder="Auto-filled from zone">
+                <div class="form-help">Auto-filled from selected zone</div>
+            </div>
+
+            <!-- District - Optional Field -->
+            <div class="form-group">
+                <label for="district" class="form-label">
+                    <i class="fas fa-map"></i>District
+                </label>
+                <input type="text" 
+                       id="district" 
+                       name="district" 
+                       placeholder="Enter district" 
+                       value="{{ request.form.district if request.form.district else (member.district if member and member.district else '') }}"
+                       class="form-input">
+                <div class="form-help">Optional - Enter district</div>
+            </div>
+
+            <!-- Province - Optional Field -->
+            <div class="form-group">
+                <label for="province" class="form-label">
+                    <i class="fas fa-map-marked-alt"></i>Province
+                </label>
+                <input type="text" 
+                       id="province" 
+                       name="province" 
+                       placeholder="Enter province" 
+                       value="{{ request.form.province if request.form.province else (member.province if member and member.province else '') }}"
+                       class="form-input">
+                <div class="form-help">Optional - Enter province</div>
             </div>
 
             <!-- Country - Autofilled from Leader -->
@@ -163,6 +212,20 @@
                     <i class="fas fa-church"></i>Church Member
                 </label>
                 <div class="form-help" style="margin-left: 32px;">Check if member is part of the church</div>
+            </div>
+
+            <!-- Potential Leader - Boolean Checkbox -->
+            <div class="form-group">
+                <label class="form-label" style="display: flex; align-items: center; cursor: pointer;">
+                    <input type="checkbox" 
+                           id="potential_leader" 
+                           name="potential_leader" 
+                           value="true"
+                           {{ 'checked' if request.form.potential_leader == 'true' or (member and member.potential_leader == True) else '' }}
+                           style="width: 20px; height: 20px; margin-right: 12px; cursor: pointer; accent-color: #3b82f6;">
+                    <i class="fas fa-user-tie"></i>Potential Leader
+                </label>
+                <div class="form-help" style="margin-left: 32px;">Check if member has potential to be a leader</div>
             </div>
             
             <!-- Form Actions -->
@@ -460,6 +523,29 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             e.target.value = value;
         });
+    }
+    
+    // Auto-fill sector_number when zone is selected
+    const zoneSelect = document.getElementById('zone_id');
+    const sectorInput = document.getElementById('sector_number');
+    
+    if (zoneSelect && sectorInput) {
+        zoneSelect.addEventListener('change', function() {
+            const selectedOption = zoneSelect.options[zoneSelect.selectedIndex];
+            const sectorNumber = selectedOption.getAttribute('data-sector');
+            
+            // Check for null, undefined, or empty string, but allow "0"
+            if (sectorNumber !== null && sectorNumber !== undefined && sectorNumber !== '') {
+                sectorInput.value = sectorNumber;
+            } else {
+                sectorInput.value = '';
+            }
+        });
+        
+        // Trigger on page load if zone is already selected
+        if (zoneSelect.value) {
+            zoneSelect.dispatchEvent(new Event('change'));
+        }
     }
     
     // Form submission with loading state

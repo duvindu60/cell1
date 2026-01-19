@@ -88,8 +88,77 @@
                 </div>
                 <div class="detail-content">
                     <div class="detail-label">Zone</div>
-                    <div class="detail-value" id="zone-display">{{ member.zone or 'Not assigned' }}</div>
-                    <input type="text" class="detail-input" id="zone-input" value="{{ member.zone or '' }}" placeholder="Enter zone" style="display: none;">
+                    <div class="detail-value" id="zone-display">{{ member.zone_name or 'Not assigned' }}</div>
+                </div>
+            </div>
+            
+            <div class="detail-item">
+                <div class="detail-icon">
+                    <i class="fas fa-hashtag"></i>
+                </div>
+                <div class="detail-content">
+                    <div class="detail-label">Sector Number</div>
+                    <div class="detail-value">{{ member.sector_number or 'Not specified' }}</div>
+                </div>
+            </div>
+            
+            <div class="detail-item">
+                <div class="detail-icon">
+                    <i class="fas fa-map"></i>
+                </div>
+                <div class="detail-content">
+                    <div class="detail-label">District</div>
+                    <div class="detail-value">{{ member.district or 'Not specified' }}</div>
+                </div>
+            </div>
+            
+            <div class="detail-item">
+                <div class="detail-icon">
+                    <i class="fas fa-map-marked-alt"></i>
+                </div>
+                <div class="detail-content">
+                    <div class="detail-label">Province</div>
+                    <div class="detail-value">{{ member.province or 'Not specified' }}</div>
+                </div>
+            </div>
+            
+            <div class="detail-item">
+                <div class="detail-icon">
+                    <i class="fas fa-globe"></i>
+                </div>
+                <div class="detail-content">
+                    <div class="detail-label">Country</div>
+                    <div class="detail-value">{{ member.country or 'Not specified' }}</div>
+                </div>
+            </div>
+            
+            <div class="detail-item">
+                <div class="detail-icon">
+                    <i class="fas fa-building"></i>
+                </div>
+                <div class="detail-content">
+                    <div class="detail-label">Branch ID</div>
+                    <div class="detail-value">{{ member.branch_id or 'Not specified' }}</div>
+                </div>
+            </div>
+            
+            <div class="detail-item">
+                <div class="detail-icon">
+                    <i class="fas fa-users"></i>
+                </div>
+                <div class="detail-content">
+                    <div class="detail-label">Cell Category</div>
+                    <div class="detail-value">{{ member.cell_category or 'Not specified' }}</div>
+                </div>
+            </div>
+            
+            <div class="detail-item">
+                <div class="detail-icon">
+                    <i class="fas fa-church"></i>
+                </div>
+                <div class="detail-content">
+                    <div class="detail-label">Church Member</div>
+                    <div class="detail-value">{{ 'Yes' if member.church else 'No' }}</div>
                 </div>
             </div>
             
@@ -131,9 +200,9 @@
         <a href="{{ url_for('main.members') }}" class="btn btn-back">
             <i class="fas fa-arrow-left"></i>Back to Members
         </a>
-        <button onclick="toggleEditMode('mobile')" class="btn btn-edit" id="editBtn-mobile">
+        <a href="{{ url_for('main.member_form', edit=member.id) }}" class="btn btn-edit" id="editBtn-mobile">
             <i class="fas fa-edit"></i>Edit Member
-        </button>
+        </a>
         <button onclick="openFlagModal()" class="btn btn-flag">
             <i class="fas fa-flag"></i>Flag Member
         </button>
@@ -142,15 +211,6 @@
         </button>
     </div>
 
-    <!-- Save Button (hidden by default) -->
-    <div class="action-buttons" id="saveButtons-mobile" style="display: none;">
-        <button onclick="saveChanges('mobile')" class="btn btn-save">
-            <i class="fas fa-save"></i>Save Changes
-        </button>
-        <button onclick="cancelEdit('mobile')" class="btn btn-cancel">
-            <i class="fas fa-times"></i>Cancel
-        </button>
-    </div>
 
     <!-- Flag Member Modal -->
     <div id="flagModal" class="modal">
@@ -710,46 +770,17 @@ let isEditMode = false;
 let originalValues = {};
 
 function toggleEditMode(platform) {
-    const editBtn = document.getElementById(`editBtn-${platform}`);
-    const saveButtons = document.getElementById(`saveButtons-${platform}`);
-    
-    if (!isEditMode) {
-        // Enter edit mode
-        isEditMode = true;
-        editBtn.style.display = 'none';
-        saveButtons.style.display = 'flex';
-        
-        // Store original values
-        originalValues = {
-            name: document.getElementById('name-display').textContent,
-            age: document.getElementById('age-display').textContent,
-            gender: document.getElementById('gender-display').textContent,
-            phone: document.getElementById('phone-display').textContent,
-            ministry: document.getElementById('ministry-display').textContent,
-            zone: document.getElementById('zone-display').textContent
-        };
-        
-        // Show input fields
-        document.getElementById('name-display').style.display = 'none';
-        document.getElementById('name-input').style.display = 'block';
-        document.getElementById('age-display').style.display = 'none';
-        document.getElementById('age-input').style.display = 'block';
-        document.getElementById('gender-display').style.display = 'none';
-        document.getElementById('gender-input').style.display = 'block';
-        document.getElementById('phone-display').style.display = 'none';
-        document.getElementById('phone-input').style.display = 'block';
-        document.getElementById('ministry-display').style.display = 'none';
-        document.getElementById('ministry-input').style.display = 'block';
-        document.getElementById('zone-display').style.display = 'none';
-        document.getElementById('zone-input').style.display = 'block';
-        
-    } else {
-        // Exit edit mode
-        cancelEdit(platform);
-    }
+    // Redirect to edit form instead of inline editing
+    window.location.href = '{{ url_for("main.member_form", edit=member.id) }}';
 }
 
 function cancelEdit(platform) {
+    // No longer needed - editing is done via form page
+    // This function is kept for compatibility but does nothing
+    return;
+    
+    // Old code (kept for reference):
+    /*
     isEditMode = false;
     document.getElementById(`editBtn-${platform}`).style.display = 'flex';
     document.getElementById(`saveButtons-${platform}`).style.display = 'none';
@@ -778,29 +809,9 @@ function cancelEdit(platform) {
 }
 
 function saveChanges(platform) {
-    // Get updated values
-    const updatedData = {
-        name: document.getElementById('name-input').value,
-        age: document.getElementById('age-input').value,
-        gender: document.getElementById('gender-input').value,
-        phone_number: document.getElementById('phone-input').value,
-        ministry: document.getElementById('ministry-input').value,
-        zone: document.getElementById('zone-input').value
-    };
-    
-    // Update display values
-    document.getElementById('name-display').textContent = updatedData.name || 'Not specified';
-    document.getElementById('age-display').textContent = updatedData.age || 'Not specified';
-    document.getElementById('gender-display').textContent = updatedData.gender || 'Not specified';
-    document.getElementById('phone-display').textContent = updatedData.phone_number || 'Not provided';
-    document.getElementById('ministry-display').textContent = updatedData.ministry || 'Not assigned';
-    document.getElementById('zone-display').textContent = updatedData.zone || 'Not assigned';
-    
-    // Exit edit mode
-    cancelEdit(platform);
-    
-    // Show success message
-    alert('Member details updated successfully!');
+    // No longer needed - editing is done via form page
+    // This function is kept for compatibility but redirects to form
+    window.location.href = '{{ url_for("main.member_form", edit=member.id) }}';
 }
 
 function confirmDelete() {
@@ -842,7 +853,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const potentialLeaderCheckbox = document.getElementById('potential-leader-checkbox-mobile');
     if (potentialLeaderCheckbox) {
         potentialLeaderCheckbox.addEventListener('change', function() {
-            const memberId = '{{ member.id }}';
+            const memberId = {{ member.id|tojson }};
             const isChecked = this.checked;
             
             // Show loading state
