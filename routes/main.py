@@ -574,8 +574,53 @@ def index():
 def profile():
     if 'user' not in session:
         return redirect(url_for('auth.login'))
+    
+    # Get leader ID from session
+    leader_id = session['user']['id']
+    
+    # Create a copy of user data to add calculated fields
+    user_data = dict(session['user'])
+    
+    # Calculate member count
+    try:
+        members_result = supabase.table('cell_members')\
+            .select('id')\
+            .eq('leader_id', leader_id)\
+            .execute()
+        user_data['members_count'] = len(members_result.data) if members_result.data else 0
+    except Exception as e:
+        print(f"Error counting members: {e}")
+        user_data['members_count'] = 0
+    
+    # Calculate total meetings held (count distinct meeting dates from attendance)
+    try:
+        attendance_result = supabase.table('attendance')\
+            .select('meeting_date')\
+            .eq('leader_id', leader_id)\
+            .execute()
+        
+        if attendance_result.data:
+            # Get unique meeting dates
+            unique_dates = set()
+            for record in attendance_result.data:
+                meeting_date = record.get('meeting_date')
+                if meeting_date:
+                    # Normalize date format (handle both string and date objects)
+                    if isinstance(meeting_date, str):
+                        # Extract just the date part if it's a datetime string
+                        date_str = meeting_date.split('T')[0] if 'T' in meeting_date else meeting_date
+                        unique_dates.add(date_str)
+                    else:
+                        unique_dates.add(str(meeting_date))
+            user_data['meetings_count'] = len(unique_dates)
+        else:
+            user_data['meetings_count'] = 0
+    except Exception as e:
+        print(f"Error counting meetings: {e}")
+        user_data['meetings_count'] = 0
+    
     template_name = f'main/profile{get_template_suffix()}.html'
-    return render_template(template_name, user=session['user'])
+    return render_template(template_name, user=user_data)
 @main_bp.route('/meeting-dates')
 def meeting_dates():
     if 'user' not in session:
