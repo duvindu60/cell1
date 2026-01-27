@@ -5,7 +5,7 @@
 {% endblock %}
 
 {% block desktop_content %}
-<div class="member-details-page">
+<div class="member-details-page" data-member-id="{{ member.id }}">
     <!-- Header Section -->
     <div class="page-header">
         <div class="header-icon">
@@ -906,14 +906,15 @@ document.addEventListener('DOMContentLoaded', function() {
     const potentialLeaderCheckbox = document.getElementById('potential-leader-checkbox');
     if (potentialLeaderCheckbox) {
         potentialLeaderCheckbox.addEventListener('change', function() {
-            const memberId = {{ member.id|tojson }};
-            const isChecked = this.checked;
+            const checkbox = this;
+            const memberId = document.querySelector('.member-details-page').dataset.memberId;
+            const isChecked = checkbox.checked;
             
             // Show loading state
-            const originalLabel = this.parentElement.querySelector('span');
+            const originalLabel = checkbox.parentElement.querySelector('span');
             const originalText = originalLabel.innerHTML;
             originalLabel.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right: 5px;"></i>Updating...';
-            this.disabled = true;
+            checkbox.disabled = true;
             
             // Send AJAX request
             fetch(`/toggle_potential_leader/${memberId}`, {
@@ -935,11 +936,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     }, 2000);
                     
                     // Update checkbox state
-                    this.checked = data.potential_leader;
+                    checkbox.checked = data.potential_leader;
                 } else {
                     // Show error message
                     originalLabel.innerHTML = '<i class="fas fa-exclamation-circle" style="color: #ef4444; margin-right: 5px;"></i>Error';
-                    this.checked = !isChecked; // Revert checkbox
+                    checkbox.checked = !isChecked; // Revert checkbox
                     setTimeout(() => {
                         originalLabel.innerHTML = originalText;
                     }, 2000);
@@ -948,13 +949,13 @@ document.addEventListener('DOMContentLoaded', function() {
             .catch(error => {
                 console.error('Error:', error);
                 originalLabel.innerHTML = '<i class="fas fa-exclamation-circle" style="color: #ef4444; margin-right: 5px;"></i>Error';
-                this.checked = !isChecked; // Revert checkbox
+                checkbox.checked = !isChecked; // Revert checkbox
                 setTimeout(() => {
                     originalLabel.innerHTML = originalText;
                 }, 2000);
             })
             .finally(() => {
-                this.disabled = false;
+                checkbox.disabled = false;
             });
         });
     }
