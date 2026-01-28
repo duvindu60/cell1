@@ -581,6 +581,37 @@ def profile():
     # Create a copy of user data to add calculated fields
     user_data = dict(session['user'])
     
+    # Map role_id to display label (role_id 4 = leader)
+    role_id = user_data.get('role_id')
+    user_data['current_role'] = 'Cell Leader' if role_id == 4 else 'Cell Member'
+    
+    # Fetch full user row for age, branch, zone if columns exist
+    try:
+        user_row = supabase.table('users').select('*').eq('id', leader_id).limit(1).execute()
+        if user_row.data and len(user_row.data) > 0:
+            row = user_row.data[0]
+            user_data['age'] = row.get('age')
+            user_data['zone'] = row.get('zone_name') or row.get('zone')
+            # Branch: resolve branch_id to branch name (branches table lookup)
+            branch_id = row.get('branch_id')
+            user_data['branch_name'] = None
+            if branch_id is not None:
+                try:
+                    branch_res = supabase.table('branches').select('name').eq('id', branch_id).limit(1).execute()
+                    if branch_res.data and len(branch_res.data) > 0 and branch_res.data[0].get('name'):
+                        user_data['branch_name'] = branch_res.data[0].get('name')
+                except Exception:
+                    pass
+            if row.get('zone_id') and not user_data.get('zone'):
+                try:
+                    zone_res = supabase.table('zones').select('name').eq('id', row['zone_id']).limit(1).execute()
+                    if zone_res.data and len(zone_res.data) > 0:
+                        user_data['zone'] = zone_res.data[0].get('name')
+                except Exception:
+                    pass
+    except Exception as e:
+        print(f"Error fetching user profile fields: {e}")
+    
     # Calculate member count
     try:
         members_result = supabase.table('cell_members')\
@@ -592,32 +623,36 @@ def profile():
         print(f"Error counting members: {e}")
         user_data['members_count'] = 0
     
-    # Calculate total meetings held (count distinct meeting dates from attendance)
+    # Calculate total meetings held and attendance rate
+    meetings_count = 0
+    present_count = 0
     try:
         attendance_result = supabase.table('attendance')\
-            .select('meeting_date')\
+            .select('meeting_date, status')\
             .eq('leader_id', leader_id)\
             .execute()
         
         if attendance_result.data:
-            # Get unique meeting dates
             unique_dates = set()
             for record in attendance_result.data:
                 meeting_date = record.get('meeting_date')
                 if meeting_date:
-                    # Normalize date format (handle both string and date objects)
-                    if isinstance(meeting_date, str):
-                        # Extract just the date part if it's a datetime string
-                        date_str = meeting_date.split('T')[0] if 'T' in meeting_date else meeting_date
-                        unique_dates.add(date_str)
-                    else:
-                        unique_dates.add(str(meeting_date))
-            user_data['meetings_count'] = len(unique_dates)
-        else:
-            user_data['meetings_count'] = 0
+                    date_str = meeting_date.split('T')[0] if isinstance(meeting_date, str) and 'T' in meeting_date else (meeting_date if isinstance(meeting_date, str) else str(meeting_date))
+                    unique_dates.add(date_str)
+                if record.get('status') == 'present':
+                    present_count += 1
+            meetings_count = len(unique_dates)
+        user_data['meetings_count'] = meetings_count
     except Exception as e:
         print(f"Error counting meetings: {e}")
         user_data['meetings_count'] = 0
+    
+    # Attendance rate: (present records) / (meetings * members) * 100 when both > 0
+    total_slots = meetings_count * user_data.get('members_count', 0)
+    if total_slots > 0:
+        user_data['attendance_rate'] = round((present_count / total_slots) * 100)
+    else:
+        user_data['attendance_rate'] = 0
     
     template_name = f'main/profile{get_template_suffix()}.html'
     return render_template(template_name, user=user_data)
