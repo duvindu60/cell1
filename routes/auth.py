@@ -39,19 +39,15 @@ def login():
             return render_template(template_name)
         
         try:
-            # Fetch user by phone_number and role_id (without password check)
+            # 1) Try leader login (users table)
             user_result = supabase.table('users').select('*').eq('role_id', 4).eq('phone_number', mobile).execute()
             
             if user_result.data and len(user_result.data) > 0:
                 user_data = user_result.data[0]
                 stored_password = user_data.get('password', '')
                 
-                # Verify password using bcrypt
                 if stored_password and bcrypt.checkpw(password.encode('utf-8'), stored_password.encode('utf-8')):
-                    # Password is correct
                     user_id = user_data.get('id')
-                    
-                    # Store user info in session
                     session['user'] = {
                         'id': user_id,
                         'mobile': mobile,
@@ -59,8 +55,6 @@ def login():
                         'email': user_data.get('email', ''),
                         'role_id': user_data.get('role_id')
                     }
-                    
-                    # Log login activity
                     try:
                         log_activity(
                             leader_id=user_id,
@@ -75,15 +69,43 @@ def login():
                         )
                     except Exception as e:
                         print(f"Error logging activity: {e}")
-                    
                     flash("Login successful!", 'success')
                     return redirect(url_for('main.index'))
-                else:
-                    # Password is incorrect
-                    flash("Invalid mobile number or password", 'error')
-            else:
-                # User not found
-                flash("Invalid mobile number or password", 'error')
+            
+            # 2) Try deputy leader login (cell_members only; no users row)
+            DEPUTY_TEST_PASSWORD = 'leader123'
+            member_result = supabase.table('cell_members').select('id, name, phone_number, leader_id').eq('phone_number', mobile).eq('deputy_leader', True).eq('can_login', True).execute()
+            if member_result.data and len(member_result.data) > 0:
+                member = member_result.data[0]
+                if password == DEPUTY_TEST_PASSWORD:
+                    leader_id = member.get('leader_id')
+                    member_id = member.get('id')
+                    session['user'] = {
+                        'id': member_id,
+                        'member_id': member_id,
+                        'leader_id': leader_id,
+                        'mobile': mobile,
+                        'name': member.get('name', 'Deputy'),
+                        'is_deputy': True
+                    }
+                    try:
+                        log_activity(
+                            leader_id=leader_id,
+                            user_id=leader_id,
+                            activity_type='user_login',
+                            description='Deputy leader logged in',
+                            user_role='deputy_leader',
+                            user_name=session['user'].get('name', 'Deputy'),
+                            source='cell_app',
+                            platform='mobile' if mobile else 'web',
+                            details={'mobile': mobile, 'login_time': 'now', 'member_id': str(member_id)}
+                        )
+                    except Exception as e:
+                        print(f"Error logging activity: {e}")
+                    flash("Login successful!", 'success')
+                    return redirect(url_for('main.attendance_list'))
+            
+            flash("Invalid mobile number or password", 'error')
         except Exception as e:
             print(f"Error during login: {e}")
             flash("An error occurred during login. Please try again.", 'error')

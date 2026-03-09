@@ -78,6 +78,21 @@ def get_uuid_from_user_id(user_id):
 # Create blueprint
 main_bp = Blueprint('main', __name__)
 
+def get_effective_leader_id():
+    """Return the leader id for the current session. Leaders: own id. Deputies: leader_id from cell_members (no users row)."""
+    if 'user' not in session:
+        return None
+    u = session['user']
+    if u.get('is_deputy'):
+        return u.get('leader_id')
+    return u.get('id')
+
+def redirect_deputy_to_attendance():
+    """If current user is a deputy, return redirect to meeting_dates (attendance); else None."""
+    if session.get('user', {}).get('is_deputy'):
+        return redirect(url_for('main.meeting_dates'))
+    return None
+
 def get_tutorial_meeting_date_corrected():
     """Get the meeting date for tutorials - CORRECTED LOGIC:
     Tuesday 12:00 AM - 11:59 PM: Show current Tuesday
@@ -159,20 +174,21 @@ def get_attendance_deadline(meeting_date):
 def can_mark_attendance(meeting_date):
     """
     Check if attendance can be marked for a given meeting date.
-    Attendance can be marked from Tuesday (meeting day) until Wednesday 11:59 PM.
-    After Wednesday 11:59 PM, attendance is locked for that week.
-    
+    Attendance can be marked from the meeting day (Tuesday) until Wednesday 11:59 PM.
+    Attendance cannot be marked before the meeting date.
+
     Args:
         meeting_date: datetime.date object representing the Tuesday meeting date
-    
+
     Returns:
         bool: True if attendance can be marked, False otherwise
     """
     now = datetime.now()
+    today = now.date()
     deadline = get_attendance_deadline(meeting_date)
-    
-    # Check if current time is before or equal to the deadline
-    return now <= deadline
+
+    # Allow only on or after meeting date, and before deadline
+    return today >= meeting_date and now <= deadline
 
 def get_attendance_reminder_info(meeting_date):
     """
@@ -235,6 +251,11 @@ def get_past_tuesdays():
 
 @main_bp.route('/')
 def index():
+    if 'user' not in session:
+        return redirect(url_for('auth.login'))
+    r = redirect_deputy_to_attendance()
+    if r:
+        return r
     # Initialize default tutorial card data
     tutorial_card_data = {
         'upcoming_date': 'No date',
@@ -244,7 +265,7 @@ def index():
     
     if 'user' in session:
         # Get leader ID - use user ID directly
-        leader_id = session['user']['id']
+        leader_id = get_effective_leader_id()
         
         try:
             # Initialize default values
@@ -574,16 +595,21 @@ def index():
 def profile():
     if 'user' not in session:
         return redirect(url_for('auth.login'))
-    
+    r = redirect_deputy_to_attendance()
+    if r:
+        return r
     # Get leader ID from session
-    leader_id = session['user']['id']
+    leader_id = get_effective_leader_id()
     
     # Create a copy of user data to add calculated fields
     user_data = dict(session['user'])
     
-    # Map role_id to display label (role_id 4 = leader)
-    role_id = user_data.get('role_id')
-    user_data['current_role'] = 'Cell Leader' if role_id == 4 else 'Cell Member'
+    # Map role for display (deputy has no role_id; they are in cell_members only)
+    if user_data.get('is_deputy'):
+        user_data['current_role'] = 'Deputy Leader'
+    else:
+        role_id = user_data.get('role_id')
+        user_data['current_role'] = 'Cell Leader' if role_id == 4 else 'Cell Member'
     
     # Fetch full user row for age, branch, zone if columns exist
     try:
@@ -662,7 +688,7 @@ def meeting_dates():
         return redirect(url_for('auth.login'))
     try:
         # Get leader ID - use user ID directly
-        leader_id = session['user']['id']
+        leader_id = get_effective_leader_id()
         
         # Get user's created date to filter meetings
         user_created_date = get_user_created_date(leader_id)
@@ -886,7 +912,7 @@ def attendance_detail(meeting_date):
     
     try:
         # Get leader ID - use user ID directly
-        leader_id = session['user']['id']
+        leader_id = get_effective_leader_id()
         
         # Convert meeting_date string to proper date format
         from datetime import datetime
@@ -952,23 +978,31 @@ def attendance_detail(meeting_date):
                 member_ids = [member['id'] for member in members]
                 attendance_result = supabase.table('attendance').select('*').eq('leader_id', leader_id).eq('meeting_date', meeting_date_formatted).in_('member_id', member_ids).execute()
                 
-                # Initialize all members as incomplete
+                # Initialize all members as incomplete (marked_by_label for when they get marked)
                 for member in members:
                     attendance_data[member['id']] = {
                         'present': False,
                         'absent': False,
-                        'incomplete': True
+                        'incomplete': True,
+                        'marked_by': None,
+                        'marked_by_label': 'Leader'
                     }
                 
-                # Update with actual attendance data
+                # Update with actual attendance data (leader_user_uuid = leader marked; member_user_uuid = deputy marked)
                 if attendance_result.data:
                     for record in attendance_result.data:
                         member_id = record['member_id']
                         status = record['status']
+                        member_user_uuid = record.get('member_user_uuid')
+                        if member_user_uuid:
+                            marked_by_label = 'Deputy Leader'
+                        else:
+                            marked_by_label = 'Leader'
                         attendance_data[member_id] = {
                             'present': status == 'present',
                             'absent': status == 'absent',
-                            'incomplete': False
+                            'incomplete': False,
+                            'marked_by_label': marked_by_label
                         }
             except Exception as e:
                 print(f"Error fetching attendance data: {e}")
@@ -977,7 +1011,9 @@ def attendance_detail(meeting_date):
                     attendance_data[member['id']] = {
                         'present': False,
                         'absent': False,
-                        'incomplete': True
+                        'incomplete': True,
+                        'marked_by': None,
+                        'marked_by_label': 'Leader'
                     }
         
         # Check if attendance can be marked for this meeting date
@@ -995,7 +1031,8 @@ def attendance_detail(meeting_date):
                              members=members,
                              attendance_data=attendance_data,
                              can_mark_attendance=can_mark,
-                             reminder_info=reminder_info)
+                             reminder_info=reminder_info,
+                             leader_id=leader_id)
     except Exception as e:
         print(f"Error in attendance_detail: {e}")
         flash('Error loading attendance page', 'error')
@@ -1015,7 +1052,7 @@ def update_attendance(meeting_date):
             return jsonify({'success': False, 'message': 'Missing required data'}), 400
         
         # Get leader ID - use user ID directly
-        leader_id = session['user']['id']
+        leader_id = get_effective_leader_id()
         
         # Convert meeting_date string to proper date format
         from datetime import datetime
@@ -1123,6 +1160,7 @@ def update_attendance(meeting_date):
             if meeting_number is None:
                 return jsonify({'success': False, 'message': 'Meeting not found. Cannot mark attendance.'}), 400
             
+            is_deputy = session['user'].get('is_deputy')
             attendance_data = {
                 'leader_id': leader_id,
                 'member_id': member_id,
@@ -1130,18 +1168,23 @@ def update_attendance(meeting_date):
                 'meeting_number': meeting_number,
                 'status': status
             }
+            if is_deputy:
+                attendance_data['member_user_uuid'] = session['user'].get('member_id')
+            else:
+                attendance_data['leader_user_uuid'] = session['user'].get('id')
             
-            # Check if record exists
             existing_result = supabase.table('attendance').select('id').eq('leader_id', leader_id).eq('member_id', member_id).eq('meeting_date', meeting_date_formatted).execute()
+            update_payload = {'status': status, 'meeting_number': meeting_number}
+            if is_deputy:
+                update_payload['member_user_uuid'] = session['user'].get('member_id')
+                update_payload['leader_user_uuid'] = None
+            else:
+                update_payload['leader_user_uuid'] = session['user'].get('id')
+                update_payload['member_user_uuid'] = None
             
             if existing_result.data and len(existing_result.data) > 0:
-                # Update existing record
-                result = supabase.table('attendance').update({
-                    'status': status,
-                    'meeting_number': meeting_number  # Update meeting_number in case it changed
-                }).eq('id', existing_result.data[0]['id']).execute()
+                result = supabase.table('attendance').update(update_payload).eq('id', existing_result.data[0]['id']).execute()
             else:
-                # Insert new record
                 result = supabase.table('attendance').insert(attendance_data).execute()
             
             if result.data and len(result.data) > 0:
@@ -1152,7 +1195,7 @@ def update_attendance(meeting_date):
                         user_id=leader_id,
                         activity_type='attendance_marked',
                         description=f'Marked {member_name} as {status} for {meeting_date}',
-                        user_role='leader',
+                        user_role='deputy_leader' if is_deputy else 'leader',
                         user_name=session['user'].get('name', 'Leader'),
                         source='cell_app',
                         platform='web',
@@ -1187,7 +1230,7 @@ def bulk_update_attendance(meeting_date):
             return jsonify({'success': False, 'message': 'No attendance data provided'}), 400
         
         # Get leader ID - use user ID directly
-        leader_id = session['user']['id']
+        leader_id = get_effective_leader_id()
         
         # Convert meeting_date string to proper date format
         try:
@@ -1265,9 +1308,7 @@ def bulk_update_attendance(meeting_date):
                     print(f"Error validating member {member_id}: {validation_error}, allowing update")
             
             try:
-                # Check if record exists
-                existing_result = supabase.table('attendance').select('id').eq('leader_id', leader_id).eq('member_id', member_id).eq('meeting_date', meeting_date_formatted).execute()
-                
+                is_deputy = session['user'].get('is_deputy')
                 attendance_data = {
                     'leader_id': leader_id,
                     'member_id': member_id,
@@ -1275,15 +1316,23 @@ def bulk_update_attendance(meeting_date):
                     'meeting_number': meeting_number,
                     'status': status
                 }
+                if is_deputy:
+                    attendance_data['member_user_uuid'] = session['user'].get('member_id')
+                else:
+                    attendance_data['leader_user_uuid'] = session['user'].get('id')
+                update_payload = {'status': status, 'meeting_number': meeting_number}
+                if is_deputy:
+                    update_payload['member_user_uuid'] = session['user'].get('member_id')
+                    update_payload['leader_user_uuid'] = None
+                else:
+                    update_payload['leader_user_uuid'] = session['user'].get('id')
+                    update_payload['member_user_uuid'] = None
+                # Check if record exists
+                existing_result = supabase.table('attendance').select('id').eq('leader_id', leader_id).eq('member_id', member_id).eq('meeting_date', meeting_date_formatted).execute()
                 
                 if existing_result.data and len(existing_result.data) > 0:
-                    # Update existing record
-                    result = supabase.table('attendance').update({
-                        'status': status,
-                        'meeting_number': meeting_number
-                    }).eq('id', existing_result.data[0]['id']).execute()
+                    result = supabase.table('attendance').update(update_payload).eq('id', existing_result.data[0]['id']).execute()
                 else:
-                    # Insert new record
                     result = supabase.table('attendance').insert(attendance_data).execute()
                 
                 if result.data and len(result.data) > 0:
@@ -1331,17 +1380,23 @@ def bulk_update_attendance(meeting_date):
 def members():
     if 'user' not in session:
         return redirect(url_for('auth.login'))
+    r = redirect_deputy_to_attendance()
+    if r:
+        return r
     try:
         # Get cell members for this leader
         # Use the user ID directly as leader_id (since role_id = 4 users ARE leaders)
-        leader_id = session['user']['id']
+        leader_id = get_effective_leader_id()
         
         # Get members for this specific leader
         result = supabase.table('cell_members').select('*').eq('leader_id', leader_id).execute()
         members = result.data if result.data else []
+        # One deputy per leader; only the leader (not deputy) can assign
+        has_deputy = any(m.get('deputy_leader') for m in members)
+        can_assign_deputy = not has_deputy and not session['user'].get('is_deputy')
         
         template_name = f'main/members{get_template_suffix()}.html'
-        return render_template(template_name, members=members, user=session['user'])
+        return render_template(template_name, members=members, user=session['user'], has_deputy=has_deputy, can_assign_deputy=can_assign_deputy)
     except Exception as e:
         error_msg = str(e)
         print(f"Error in members route: {error_msg}")  # Enhanced logging
@@ -1362,9 +1417,11 @@ def member_form():
     """Display the member form page"""
     if 'user' not in session:
         return redirect(url_for('auth.login'))
-    
+    r = redirect_deputy_to_attendance()
+    if r:
+        return r
     # Get leader's branch_id and country for autofill
-    leader_id = session['user']['id']
+    leader_id = get_effective_leader_id()
     leader_branch_id = None
     leader_country = None
     
@@ -1422,11 +1479,13 @@ def member_form():
 def member_details(member_id):
     if 'user' not in session:
         return redirect(url_for('auth.login'))
-    
+    r = redirect_deputy_to_attendance()
+    if r:
+        return r
     try:
         # Get specific member details
         # Use the user ID directly as leader_id
-        leader_id = session['user']['id']
+        leader_id = get_effective_leader_id()
         
         # Get member with leader filter
         result = supabase.table('cell_members').select('*').eq('id', member_id).eq('leader_id', leader_id).execute()
@@ -1446,9 +1505,31 @@ def member_details(member_id):
             
             # Add zone_name to member data for template
             member['zone_name'] = zone_name
+
+            # Check if there is a pending delete request for this member
+            delete_request_pending = False
+            try:
+                delete_request_result = (
+                    supabase.table('flagged_issues')
+                    .select('id')
+                    .eq('member_id', member_id)
+                    .eq('leader_id', leader_id)
+                    .eq('issue_type', 'delete_request')
+                    .eq('status', 'pending')
+                    .limit(1)
+                    .execute()
+                )
+                delete_request_pending = bool(delete_request_result.data)
+            except Exception as e:
+                print(f"Error checking delete request status for member {member_id}: {e}")
             
             template_name = f'main/member_details{get_template_suffix()}.html'
-            return render_template(template_name, member=member, user=session['user'])
+            return render_template(
+                template_name,
+                member=member,
+                user=session['user'],
+                delete_request_pending=delete_request_pending,
+            )
         else:
             flash('Member not found', 'error')
             return redirect(url_for('main.members'))
@@ -1484,7 +1565,7 @@ def add_member():
     # If there are validation errors, return to form with errors
     if form_errors:
         # Get leader's branch_id and country for autofill
-        leader_id = session['user']['id']
+        leader_id = get_effective_leader_id()
         leader_branch_id = None
         leader_country = None
         try:
@@ -1525,7 +1606,7 @@ def add_member():
                              zones=zones)
     try:
         # Use the user ID directly as leader_id (since role_id = 4 users ARE leaders)
-        leader_id = session['user']['id']
+        leader_id = get_effective_leader_id()
         
         # Get leader's branch_id and country for autofill
         leader_branch_id = None
@@ -1608,7 +1689,7 @@ def add_member():
         else:
             flash('Error adding member to database', 'error')
             # Get leader's branch_id and country for autofill
-            leader_id = session['user']['id']
+            leader_id = get_effective_leader_id()
             leader_branch_id = None
             leader_country = None
             try:
@@ -1639,7 +1720,7 @@ def add_member():
         error_msg = str(e)
         flash(f'Error adding member: {error_msg}', 'error')
         # Get leader's branch_id and country for autofill
-        leader_id = session['user']['id']
+        leader_id = get_effective_leader_id()
         leader_branch_id = None
         leader_country = None
         try:
@@ -1684,7 +1765,7 @@ def update_member(member_id):
         return redirect(url_for('auth.login'))
     try:
         # Use the user ID directly as leader_id
-        leader_id = session['user']['id']
+        leader_id = get_effective_leader_id()
         
         # Get leader's branch_id and country for autofill
         leader_branch_id = None
@@ -1761,52 +1842,96 @@ def update_member(member_id):
         print(f"Error updating member: {e}")
         flash(f'Error updating member: {str(e)}', 'error')
         return redirect(url_for('main.member_details', member_id=member_id))
-@main_bp.route('/delete_member/<member_id>', methods=['POST'])
-def delete_member(member_id):
+@main_bp.route('/request_delete_member/<member_id>', methods=['POST'])
+def request_delete_member(member_id):
+    """Create a delete request for a member using flagged_issues (issue_type='delete_request')."""
     if 'user' not in session:
         return redirect(url_for('auth.login'))
     try:
-        # Use the user ID directly as leader_id
-        leader_id = session['user']['id']
-        
-        # First get member details for logging
-        member_result = supabase.table('cell_members').select('name').eq('id', member_id).eq('leader_id', leader_id).execute()
+        leader_id = get_effective_leader_id()
+
+        # Verify member belongs to this leader and get basic info
+        member_result = (
+            supabase.table('cell_members')
+            .select('id, name')
+            .eq('id', member_id)
+            .eq('leader_id', leader_id)
+            .execute()
+        )
         if not member_result.data:
-            flash('Member not found', 'error')
+            flash('Member not found or you do not have permission to request deletion for this member', 'error')
             return redirect(url_for('main.members'))
-        member_name = member_result.data[0]['name']
-        # Delete the member
-        result = supabase.table('cell_members').delete().eq('id', member_id).eq('leader_id', leader_id).execute()
-        # Log activity
+
+        member = member_result.data[0]
+        member_name = member.get('name', 'Unknown')
+
+        # Check if there is already a pending delete request for this member/leader
+        existing_request = (
+            supabase.table('flagged_issues')
+            .select('id')
+            .eq('member_id', member_id)
+            .eq('leader_id', leader_id)
+            .eq('issue_type', 'delete_request')
+            .eq('status', 'pending')
+            .limit(1)
+            .execute()
+        )
+        if existing_request.data:
+            flash('A delete request is already pending for this member.', 'info')
+            return redirect(url_for('main.member_details', member_id=member_id))
+
+        # Create a new flagged issue as a delete request
+        flag_data = {
+            'member_id': member_id,
+            'leader_id': leader_id,
+            'issue_type': 'delete_request',
+            'description': f'Request to delete member {member_name}',
+            'status': 'pending',
+        }
+
+        result = supabase.table('flagged_issues').insert(flag_data).execute()
+
         if result.data:
-            log_activity(
-                leader_id=leader_id,
-                user_id=leader_id,
-                activity_type='member_deleted',
-                description=f'Deleted member: {member_name}',
-                user_role='leader',
-                user_name=session['user'].get('name', 'Leader'),
-                source='cell_app',
-                platform='web',
-                details={
-                    'member_name': member_name,
-                    'member_id': member_id
-                }
-            )
-        flash(f'Member {member_name} deleted successfully!', 'success')
-        return redirect(url_for('main.members'))
+            # Log activity for audit trail
+            try:
+                log_activity(
+                    leader_id=leader_id,
+                    user_id=leader_id,
+                    activity_type='member_delete_requested',
+                    description=f'Requested deletion of member: {member_name}',
+                    user_role='leader',
+                    user_name=session['user'].get('name', 'Leader'),
+                    source='cell_app',
+                    platform='web',
+                    details={
+                        'member_id': member_id,
+                        'member_name': member_name,
+                        'flag_id': result.data[0].get('id') if result.data else None,
+                    },
+                )
+            except Exception as e:
+                print(f"Error logging delete request activity: {e}")
+
+            flash('Delete request sent to cell portal for review.', 'success')
+        else:
+            flash('Error submitting delete request.', 'error')
+
+        return redirect(url_for('main.member_details', member_id=member_id))
     except Exception as e:
-        print(f"Error deleting member: {e}")
-        flash(f'Error deleting member: {str(e)}', 'error')
-        return redirect(url_for('main.members'))
+        print(f"Error requesting member delete: {e}")
+        flash(f'Error requesting member delete: {str(e)}', 'error')
+        return redirect(url_for('main.member_details', member_id=member_id))
 @main_bp.route('/meeting-tutorials/<meeting_date>')
 def meeting_tutorials(meeting_date):
     """Display tutorial for specific meeting date or show 'No Tutorials' if none exists"""
     if 'user' not in session:
         return redirect(url_for('auth.login'))
+    r = redirect_deputy_to_attendance()
+    if r:
+        return r
     try:
         # Get leader ID - use user ID directly
-        leader_id = session['user']['id']
+        leader_id = get_effective_leader_id()
         
         # Convert meeting_date from URL format to database format
         from datetime import datetime
@@ -1855,7 +1980,7 @@ def upload_tutorial(meeting_date):
             flash('Tutorial name is required', 'error')
             return redirect(url_for('main.meeting_tutorials', meeting_date=meeting_date))
         # Get leader ID - use user ID directly
-        leader_id = session['user']['id']
+        leader_id = get_effective_leader_id()
         # Convert meeting_date string to proper date format
         from datetime import datetime
         try:
@@ -1903,14 +2028,16 @@ def tutorials_list():
     """Show all tutorials with status - only for meetings in meetings table"""
     if 'user' not in session:
         return redirect(url_for('auth.login'))
-    
+    r = redirect_deputy_to_attendance()
+    if r:
+        return r
     try:
         # Get pagination parameters
         page = request.args.get('page', 1, type=int)
         per_page = 5  # 5 tutorials per page
         
         # Get leader ID - use user ID directly
-        leader_id = session['user']['id']
+        leader_id = get_effective_leader_id()
         
         # Get tutorial list from meetings table
         tutorial_list = []
@@ -2043,7 +2170,7 @@ def attendance_list():
         per_page = 5  # 5 attendance records per page
         
         # Get leader ID - use user ID directly
-        leader_id = session['user']['id']
+        leader_id = get_effective_leader_id()
         
         # Get user's created date to filter meetings
         user_created_date = get_user_created_date(leader_id)
@@ -2192,7 +2319,7 @@ def flag_member(member_id):
         return redirect(url_for('auth.login'))
     
     try:
-        leader_id = session['user']['id']
+        leader_id = get_effective_leader_id()
         
         # Verify member belongs to this leader
         member_result = supabase.table('cell_members').select('*').eq('id', member_id).eq('leader_id', leader_id).execute()
@@ -2264,7 +2391,7 @@ def toggle_potential_leader(member_id):
         return jsonify({'success': False, 'message': 'Not authenticated'}), 401
     
     try:
-        leader_id = session['user']['id']
+        leader_id = get_effective_leader_id()
         
         # Get current member data to verify ownership
         member_result = supabase.table('cell_members').select('potential_leader').eq('id', member_id).eq('leader_id', leader_id).execute()
@@ -2316,5 +2443,56 @@ def toggle_potential_leader(member_id):
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'message': f'Error updating status: {str(e)}'}), 500
+
+
+@main_bp.route('/set_deputy_leader/<member_id>', methods=['POST'])
+def set_deputy_leader(member_id):
+    """Assign a member as deputy leader. Only leaders can assign; one deputy per leader."""
+    if 'user' not in session:
+        return jsonify({'success': False, 'message': 'Not authenticated'}), 401
+    if session['user'].get('is_deputy'):
+        return jsonify({'success': False, 'message': 'Only the leader can assign a deputy.'}), 403
+    try:
+        leader_id = get_effective_leader_id()
+        member_result = supabase.table('cell_members').select('id, name, deputy_leader').eq('id', member_id).eq('leader_id', leader_id).execute()
+        if not member_result.data or len(member_result.data) == 0:
+            return jsonify({'success': False, 'message': 'Member not found or access denied'}), 404
+        member = member_result.data[0]
+        if member.get('deputy_leader'):
+            return jsonify({'success': False, 'message': 'This member is already the deputy leader.'}), 400
+        # Clear any existing deputy for this leader (enforce one deputy per leader)
+        try:
+            existing = supabase.table('cell_members').select('id').eq('leader_id', leader_id).eq('deputy_leader', True).execute()
+            if existing.data:
+                for row in existing.data:
+                    supabase.table('cell_members').update({'deputy_leader': False, 'can_login': False}).eq('id', row['id']).execute()
+        except Exception as clear_err:
+            print(f"Error clearing existing deputy (column may not exist): {clear_err}")
+        result = supabase.table('cell_members').update({
+            'deputy_leader': True,
+            'can_login': True
+        }).eq('id', member_id).eq('leader_id', leader_id).execute()
+        if result.data:
+            try:
+                log_activity(
+                    leader_id=leader_id,
+                    user_id=leader_id,
+                    activity_type='deputy_leader_assigned',
+                    description=f'Assigned {member.get("name", "Unknown")} as deputy leader',
+                    user_role='leader',
+                    user_name=session['user'].get('name', 'Leader'),
+                    source='cell_app',
+                    platform='web',
+                    details={'member_id': member_id, 'member_name': member.get('name')}
+                )
+            except Exception as e:
+                print(f"Error logging activity: {e}")
+            return jsonify({'success': True, 'message': 'Deputy leader assigned. This cannot be changed later.'})
+        return jsonify({'success': False, 'message': 'Failed to assign deputy leader'}), 500
+    except Exception as e:
+        print(f"Error setting deputy leader: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 

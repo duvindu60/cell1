@@ -213,39 +213,33 @@
 {% endblock %}
 
 {% block mobile_nav %}
-<a href="{{ url_for('main.index') }}" class="nav-link active">
-    <i class="fas fa-home"></i>
-    <span>Home</span>
-</a>
-<a href="{{ url_for('main.members') }}" class="nav-link">
-    <i class="fas fa-users"></i>
-    <span>Members</span>
-</a>
-<a href="{{ url_for('main.profile') }}" class="nav-link">
-    <i class="fas fa-user"></i>
-    <span>Profile</span>
-</a>
-<a href="{{ url_for('auth.logout') }}" class="nav-link">
-    <i class="fas fa-sign-out-alt"></i>
-    <span>Logout</span>
-</a>
+{% if user and user.is_deputy %}
+<span class="nav-link nav-link-disabled"><i class="fas fa-home"></i><span>Home</span></span>
+<span class="nav-link nav-link-disabled"><i class="fas fa-users"></i><span>Members</span></span>
+<span class="nav-link nav-link-disabled"><i class="fas fa-user"></i><span>Profile</span></span>
+<a href="{{ url_for('main.meeting_dates') }}" class="nav-link"><i class="fas fa-user-check"></i><span>Attendance</span></a>
+<a href="{{ url_for('auth.logout') }}" class="nav-link"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
+{% else %}
+<a href="{{ url_for('main.index') }}" class="nav-link"><i class="fas fa-home"></i><span>Home</span></a>
+<a href="{{ url_for('main.members') }}" class="nav-link"><i class="fas fa-users"></i><span>Members</span></a>
+<a href="{{ url_for('main.profile') }}" class="nav-link"><i class="fas fa-user"></i><span>Profile</span></a>
+<a href="{{ url_for('main.meeting_dates') }}" class="nav-link"><i class="fas fa-user-check"></i><span>Attendance</span></a>
+<a href="{{ url_for('auth.logout') }}" class="nav-link"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
+{% endif %}
 {% endblock %}
 
 {% block desktop_nav %}
-<a href="{{ url_for('main.index') }}" class="nav-link active">
-    <i class="fas fa-home"></i>
-    <span>Home</span>
-</a>
-<a href="{{ url_for('main.members') }}" class="nav-link">
-    <i class="fas fa-users"></i>
-    <span>Members</span>
-</a>
-<a href="{{ url_for('main.profile') }}" class="nav-link">
-    <i class="fas fa-user"></i>
-    <span>Profile</span>
-</a>
-<a href="{{ url_for('auth.logout') }}" class="nav-link">
-    <i class="fas fa-sign-out-alt"></i>
-    <span>Logout</span>
-</a>
+{% if user and user.is_deputy %}
+<span class="nav-link nav-link-disabled"><i class="fas fa-home"></i><span>Home</span></span>
+<span class="nav-link nav-link-disabled"><i class="fas fa-users"></i><span>Members</span></span>
+<span class="nav-link nav-link-disabled"><i class="fas fa-user"></i><span>Profile</span></span>
+<a href="{{ url_for('main.meeting_dates') }}" class="nav-link"><i class="fas fa-user-check"></i><span>Attendance</span></a>
+<a href="{{ url_for('auth.logout') }}" class="nav-link"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
+{% else %}
+<a href="{{ url_for('main.index') }}" class="nav-link"><i class="fas fa-home"></i><span>Home</span></a>
+<a href="{{ url_for('main.members') }}" class="nav-link"><i class="fas fa-users"></i><span>Members</span></a>
+<a href="{{ url_for('main.profile') }}" class="nav-link"><i class="fas fa-user"></i><span>Profile</span></a>
+<a href="{{ url_for('main.meeting_dates') }}" class="nav-link"><i class="fas fa-user-check"></i><span>Attendance</span></a>
+<a href="{{ url_for('auth.logout') }}" class="nav-link"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
+{% endif %}
 {% endblock %}

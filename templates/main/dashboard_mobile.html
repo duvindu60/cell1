@@ -7,7 +7,7 @@
     <div class="dashboard-header">
         <div class="header-content">
             <div class="user-info">
-                <h1>Welcome back, {{ user.name or 'Leader' }}!</h1>
+                <h1>Welcome back, {% if user.is_deputy %}Deputy Leader{% else %}{{ user.name or 'Leader' }}{% endif %}!</h1>
                 <p>{{ today.strftime('%A, %B %d, %Y') if today else 'Today' }}</p>
             </div>
             <div class="profile-button">
@@ -195,22 +195,19 @@
 {% endblock %}
 
 {% block mobile_nav %}
-<a href="{{ url_for('main.index') }}" class="nav-link active">
-    <i class="fas fa-home"></i>
-    <span>Home</span>
-</a>
-<a href="{{ url_for('main.members') }}" class="nav-link">
-    <i class="fas fa-users"></i>
-    <span>Members</span>
-</a>
-<a href="{{ url_for('main.profile') }}" class="nav-link">
-    <i class="fas fa-user"></i>
-    <span>Profile</span>
-</a>
-<a href="{{ url_for('auth.logout') }}" class="nav-link">
-    <i class="fas fa-sign-out-alt"></i>
-    <span>Logout</span>
-</a>
+{% if user and user.is_deputy %}
+<span class="nav-link nav-link-disabled"><i class="fas fa-home"></i><span>Home</span></span>
+<span class="nav-link nav-link-disabled"><i class="fas fa-users"></i><span>Members</span></span>
+<span class="nav-link nav-link-disabled"><i class="fas fa-user"></i><span>Profile</span></span>
+<a href="{{ url_for('main.meeting_dates') }}" class="nav-link active"><i class="fas fa-user-check"></i><span>Attendance</span></a>
+<a href="{{ url_for('auth.logout') }}" class="nav-link"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
+{% else %}
+<a href="{{ url_for('main.index') }}" class="nav-link active"><i class="fas fa-home"></i><span>Home</span></a>
+<a href="{{ url_for('main.members') }}" class="nav-link"><i class="fas fa-users"></i><span>Members</span></a>
+<a href="{{ url_for('main.profile') }}" class="nav-link"><i class="fas fa-user"></i><span>Profile</span></a>
+<a href="{{ url_for('main.meeting_dates') }}" class="nav-link"><i class="fas fa-user-check"></i><span>Attendance</span></a>
+<a href="{{ url_for('auth.logout') }}" class="nav-link"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
+{% endif %}
 {% endblock %}
 
 {% block extra_css %}

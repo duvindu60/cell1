@@ -35,7 +35,7 @@
             {% if members %}
                 <div class="members-list">
                     {% for member in members %}
-                        <a href="{{ url_for('main.member_details', member_id=member.id) }}" class="member-item {{ 'potential-leader' if member.potential_leader else '' }}">
+                        <a href="{{ url_for('main.member_details', member_id=member.id) }}" class="member-item {{ 'potential-leader' if member.potential_leader else '' }} {{ 'deputy-leader' if member.deputy_leader else '' }}">
                             <div class="member-content">
                                 <div class="member-number">{{ loop.index }}</div>
                                 <div class="member-details">
@@ -44,12 +44,22 @@
                                         {% if member.potential_leader %}
                                             <i class="fas fa-star" style="color: #FFD700; margin-left: 8px; font-size: 0.9em;"></i>
                                         {% endif %}
+                                        {% if member.deputy_leader %}
+                                            <i class="fas fa-user-shield" style="color: #58a6ff; margin-left: 8px; font-size: 0.9em;" title="Deputy Leader"></i>
+                                        {% endif %}
                                     </div>
                                     <div class="member-info">{{ member.phone_number or 'No phone' }}</div>
                                     <div class="member-email">{{ member.email or 'No email' }}</div>
                                 </div>
-                                <div class="member-arrow">
-                                    <i class="fas fa-chevron-right"></i>
+                                <div class="member-actions-inline">
+                                    {% if can_assign_deputy and not member.deputy_leader %}
+                                    <button type="button" class="btn-set-deputy" onclick="event.preventDefault(); event.stopPropagation(); setDeputyLeader('{{ member.id }}', this);" title="Set as Deputy Leader">
+                                        <i class="fas fa-user-shield"></i> Set as Deputy
+                                    </button>
+                                    {% endif %}
+                                    <div class="member-arrow">
+                                        <i class="fas fa-chevron-right"></i>
+                                    </div>
                                 </div>
                             </div>
                         </a>
@@ -72,42 +82,64 @@
 </div>
 {% endblock %}
 
+{% block extra_js %}
+<script>
+function setDeputyLeader(memberId, btn) {
+    if (btn.disabled) return;
+    btn.disabled = true;
+    var url = "{{ url_for('main.set_deputy_leader', member_id='__ID__') }}".replace('__ID__', memberId);
+    fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        body: '{}'
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.success) {
+            window.location.reload();
+        } else {
+            alert(data.message || 'Failed to assign deputy leader');
+            btn.disabled = false;
+        }
+    })
+    .catch(function() {
+        alert('Request failed. Please try again.');
+        btn.disabled = false;
+    });
+}
+</script>
+{% endblock %}
+
 {% block mobile_nav %}
-<a href="{{ url_for('main.index') }}" class="nav-link">
-    <i class="fas fa-home"></i>
-    <span>Home</span>
-</a>
-<a href="{{ url_for('main.members') }}" class="nav-link active">
-    <i class="fas fa-users"></i>
-    <span>Members</span>
-</a>
-<a href="{{ url_for('main.profile') }}" class="nav-link">
-    <i class="fas fa-user"></i>
-    <span>Profile</span>
-</a>
-<a href="{{ url_for('auth.logout') }}" class="nav-link">
-    <i class="fas fa-sign-out-alt"></i>
-    <span>Logout</span>
-</a>
+{% if user and user.is_deputy %}
+<span class="nav-link nav-link-disabled"><i class="fas fa-home"></i><span>Home</span></span>
+<span class="nav-link nav-link-disabled"><i class="fas fa-users"></i><span>Members</span></span>
+<span class="nav-link nav-link-disabled"><i class="fas fa-user"></i><span>Profile</span></span>
+<a href="{{ url_for('main.meeting_dates') }}" class="nav-link"><i class="fas fa-user-check"></i><span>Attendance</span></a>
+<a href="{{ url_for('auth.logout') }}" class="nav-link"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
+{% else %}
+<a href="{{ url_for('main.index') }}" class="nav-link"><i class="fas fa-home"></i><span>Home</span></a>
+<a href="{{ url_for('main.members') }}" class="nav-link active"><i class="fas fa-users"></i><span>Members</span></a>
+<a href="{{ url_for('main.profile') }}" class="nav-link"><i class="fas fa-user"></i><span>Profile</span></a>
+<a href="{{ url_for('main.meeting_dates') }}" class="nav-link"><i class="fas fa-user-check"></i><span>Attendance</span></a>
+<a href="{{ url_for('auth.logout') }}" class="nav-link"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
+{% endif %}
 {% endblock %}
 
 {% block desktop_nav %}
-<a href="{{ url_for('main.index') }}" class="nav-link">
-    <i class="fas fa-home"></i>
-    <span>Home</span>
-</a>
-<a href="{{ url_for('main.members') }}" class="nav-link active">
-    <i class="fas fa-users"></i>
-    <span>Members</span>
-</a>
-<a href="{{ url_for('main.profile') }}" class="nav-link">
-    <i class="fas fa-user"></i>
-    <span>Profile</span>
-</a>
-<a href="{{ url_for('auth.logout') }}" class="nav-link">
-    <i class="fas fa-sign-out-alt"></i>
-    <span>Logout</span>
-</a>
+{% if user and user.is_deputy %}
+<span class="nav-link nav-link-disabled"><i class="fas fa-home"></i><span>Home</span></span>
+<span class="nav-link nav-link-disabled"><i class="fas fa-users"></i><span>Members</span></span>
+<span class="nav-link nav-link-disabled"><i class="fas fa-user"></i><span>Profile</span></span>
+<a href="{{ url_for('main.meeting_dates') }}" class="nav-link"><i class="fas fa-user-check"></i><span>Attendance</span></a>
+<a href="{{ url_for('auth.logout') }}" class="nav-link"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
+{% else %}
+<a href="{{ url_for('main.index') }}" class="nav-link"><i class="fas fa-home"></i><span>Home</span></a>
+<a href="{{ url_for('main.members') }}" class="nav-link active"><i class="fas fa-users"></i><span>Members</span></a>
+<a href="{{ url_for('main.profile') }}" class="nav-link"><i class="fas fa-user"></i><span>Profile</span></a>
+<a href="{{ url_for('main.meeting_dates') }}" class="nav-link"><i class="fas fa-user-check"></i><span>Attendance</span></a>
+<a href="{{ url_for('auth.logout') }}" class="nav-link"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
+{% endif %}
 {% endblock %}
 
 {% block extra_css %}
@@ -295,6 +327,56 @@
 
 .member-item:last-child {
     margin-bottom: 0;
+}
+
+/* Deputy Leader Styling - distinct color */
+.member-item.deputy-leader {
+    background: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
+    border: 2px solid #58a6ff;
+    box-shadow: 0 4px 16px rgba(88, 166, 255, 0.25);
+}
+
+.member-item.deputy-leader:hover {
+    border-color: #79b8ff;
+    box-shadow: 0 8px 24px rgba(88, 166, 255, 0.3);
+}
+
+.member-item.deputy-leader .member-number {
+    background: linear-gradient(135deg, #58a6ff, #79b8ff);
+    color: #0d1117;
+}
+
+.member-actions-inline {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-left: 0.5rem;
+}
+
+.btn-set-deputy {
+    background: linear-gradient(135deg, #238636, #2ea043);
+    color: white;
+    border: none;
+    padding: 0.4rem 0.75rem;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.btn-set-deputy:hover {
+    background: linear-gradient(135deg, #2ea043, #238636);
+    transform: translateY(-1px);
+}
+
+.btn-set-deputy:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
 }
 
 /* Potential Leader Styling */

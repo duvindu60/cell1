@@ -12,7 +12,7 @@
                 <h3 class="text-white fw-bold mb-1">📱 Attendance</h3>
                 <p class="text-light mb-0">{{ meeting_date }}</p>
             </div>
-            <a href="{{ url_for('main.meeting_dates') }}" class="btn btn-outline-light btn-sm">
+            <a href="{{ url_for('main.attendance_list') }}" class="btn btn-outline-light btn-sm">
                 <i class="fas fa-arrow-left"></i>
             </a>
         </div>
@@ -111,6 +111,9 @@
                                     Not marked
                                 {% endif %}
                             </span>
+                            {% if attendance_data[member.id].present or attendance_data[member.id].absent %}
+                            <div class="marked-by-mobile">Marked by: {{ attendance_data[member.id].marked_by_label | default('Leader') }}</div>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -386,6 +389,18 @@
     color: white;
 }
 
+.marked-by-mobile {
+    font-size: 0.7rem;
+    color: #8b949e;
+    margin-top: 0.25rem;
+}
+
+.marked-by-desktop {
+    font-size: 0.8rem;
+    color: #8b949e;
+    margin-top: 0.35rem;
+}
+
 .no-members-mobile {
     text-align: center;
     padding: 3rem 1rem;
@@ -632,8 +647,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 <h2 class="text-white fw-bold mb-1">🖥️ Attendance Management</h2>
                 <p class="text-light mb-0">{{ meeting_date }}</p>
             </div>
-            <a href="{{ url_for('main.meeting_dates') }}" class="btn btn-outline-light">
-                <i class="fas fa-arrow-left me-2"></i>Back to Meeting Dates
+            <a href="{{ url_for('main.attendance_list') }}" class="btn btn-outline-light">
+                <i class="fas fa-arrow-left me-2"></i>Back to Attendance List
             </a>
         </div>
     </div>
@@ -732,6 +747,9 @@ document.addEventListener('DOMContentLoaded', function() {
                                         <i class="fas fa-church"></i>
                                         <span>{{ member.ministry }}</span>
                                     </div>
+                                    {% endif %}
+                                    {% if attendance_data[member.id].present or attendance_data[member.id].absent %}
+                                    <div class="marked-by-desktop">Marked by: {{ attendance_data[member.id].marked_by_label | default('Leader') }}</div>
                                     {% endif %}
                                 </div>
                             </div>
