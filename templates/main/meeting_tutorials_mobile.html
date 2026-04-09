@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Meeting Tutorials - {{ meeting_date }}{% endblock %}
 
-{% block mobile_content %}
+{% macro meeting_tutorials_mobile_body() %}
 <div class="meeting-tutorials-page">
     <!-- Mobile Page Header -->
     <div class="page-header">
@@ -22,40 +22,59 @@
         {% endif %}
     </div>
 
-    <!-- Tutorials List -->
-    {% if tutorials %}
-        <div class="tutorials-list">
-            {% for tutorial in tutorials %}
-                {% set pdf_url = tutorial.file_url or tutorial.pdf_url or tutorial.url or tutorial.file_path %}
-                {% if pdf_url and pdf_url|trim|length > 0 %}
-                <a href="{{ pdf_url }}" target="_blank" rel="noopener noreferrer" class="tutorial-link">
+    <!-- Tutorials by section: PDFs, videos, other links -->
+    {% if tutorial_sections %}
+        {% for section in tutorial_sections %}
+        <div class="tutorial-section-block">
+            <h2 class="tutorial-section-heading">
+                {% if section.kind == 'pdf' %}
+                <i class="fas fa-file-pdf" aria-hidden="true"></i> {{ section.title }}
+                {% elif section.kind == 'video' %}
+                <i class="fas fa-video" aria-hidden="true"></i> {{ section.title }}
+                {% else %}
+                <i class="fas fa-link" aria-hidden="true"></i> {{ section.title }}
                 {% endif %}
-                <div class="tutorial-card-mobile">
-                    <div class="tutorial-header">
-                        <div class="tutorial-icon">
-                            <i class="fas fa-file-pdf"></i>
-                        </div>
-                        <div class="tutorial-info">
-                            <h3>{{ tutorial.tutorial_name or 'Tutorial' }}</h3>
-                            <p class="tutorial-date">{{ tutorial.meeting_date }}</p>
-                        </div>
-                    </div>
-                    {% if tutorial.description %}
-                        <div class="tutorial-description">
-                            <p>{{ tutorial.description }}</p>
-                        </div>
+            </h2>
+            <div class="tutorials-list">
+                {% for tutorial in section.entries %}
+                    {% set res_url = (tutorial.file_url or tutorial.pdf_url_1 or tutorial.pdf_url_2 or tutorial.pdf_url_3 or tutorial.video_url_1 or tutorial.video_url_2 or tutorial.video_url_3 or tutorial.pdf_url or tutorial.url or tutorial.link or tutorial.document_url or tutorial.video_url or tutorial.attachment_url or tutorial.file_path or '')|trim %}
+                    {% if res_url|length > 0 %}
+                    <a href="{{ res_url }}" target="_blank" rel="noopener noreferrer" class="tutorial-link">
                     {% endif %}
-                    <div class="tutorial-footer">
-                        <small class="text-muted">
-                            Uploaded: {{ tutorial.uploaded_at[:19].replace('T', ' at ') if tutorial.uploaded_at else 'Recently' }}
-                        </small>
+                    <div class="tutorial-card-mobile">
+                        <div class="tutorial-header">
+                            <div class="tutorial-icon tutorial-icon--{{ section.kind }}">
+                                {% if section.kind == 'pdf' %}
+                                <i class="fas fa-file-pdf"></i>
+                                {% elif section.kind == 'video' %}
+                                <i class="fas fa-play-circle"></i>
+                                {% else %}
+                                <i class="fas fa-external-link-alt"></i>
+                                {% endif %}
+                            </div>
+                            <div class="tutorial-info">
+                                <h3>{{ tutorial.tutorial_name or tutorial.title or 'Tutorial' }}</h3>
+                                <p class="tutorial-date">{{ tutorial.meeting_date }}</p>
+                            </div>
+                        </div>
+                        {% if tutorial.description %}
+                            <div class="tutorial-description">
+                                <p>{{ tutorial.description }}</p>
+                            </div>
+                        {% endif %}
+                        <div class="tutorial-footer">
+                            <small class="text-muted">
+                                Uploaded: {% if tutorial.uploaded_at %}{% set ua = tutorial.uploaded_at|string %}{{ ua[:19].replace('T', ' at ') }}{% else %}Recently{% endif %}
+                            </small>
+                        </div>
                     </div>
-                </div>
-                {% if pdf_url %}
-                </a>
-                {% endif %}
-            {% endfor %}
+                    {% if res_url|length > 0 %}
+                    </a>
+                    {% endif %}
+                {% endfor %}
+            </div>
         </div>
+        {% endfor %}
     {% else %}
         <div class="empty-state">
             <div class="empty-state-icon">
@@ -76,7 +95,10 @@
         </a>
     </div>
 </div>
-{% endblock %}
+{% endmacro %}
+
+{% block mobile_content %}{{ meeting_tutorials_mobile_body() }}{% endblock %}
+{% block desktop_content %}{{ meeting_tutorials_mobile_body() }}{% endblock %}
 
 {% block mobile_nav %}
 {% if user and user.is_deputy %}
@@ -84,13 +106,13 @@
 <span class="nav-link nav-link-disabled"><i class="fas fa-users"></i><span>Members</span></span>
 <span class="nav-link nav-link-disabled"><i class="fas fa-user"></i><span>Profile</span></span>
 <a href="{{ url_for('main.meeting_dates') }}" class="nav-link"><i class="fas fa-user-check"></i><span>Attendance</span></a>
-<a href="{{ url_for('auth.logout') }}" class="nav-link"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
+<a href="{{ url_for('main.leaderboard') }}" class="nav-link"><i class="fas fa-medal"></i><span>Leaderboard</span></a>
 {% else %}
 <a href="{{ url_for('main.index') }}" class="nav-link"><i class="fas fa-home"></i><span>Home</span></a>
 <a href="{{ url_for('main.members') }}" class="nav-link"><i class="fas fa-users"></i><span>Members</span></a>
 <a href="{{ url_for('main.profile') }}" class="nav-link"><i class="fas fa-user"></i><span>Profile</span></a>
 <a href="{{ url_for('main.meeting_dates') }}" class="nav-link"><i class="fas fa-user-check"></i><span>Attendance</span></a>
-<a href="{{ url_for('auth.logout') }}" class="nav-link"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
+<a href="{{ url_for('main.leaderboard') }}" class="nav-link"><i class="fas fa-medal"></i><span>Leaderboard</span></a>
 {% endif %}
 {% endblock %}
 
@@ -160,12 +182,43 @@
     z-index: 1;
 }
 
+.tutorial-section-block {
+    margin-bottom: 2rem;
+}
+
+.tutorial-section-heading {
+    color: #e2e8f0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 0 0 1rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #475569;
+}
+
+.tutorial-section-heading i {
+    color: #3b82f6;
+    font-size: 1rem;
+}
+
+.tutorial-icon--video {
+    background: linear-gradient(135deg, #a855f7, #7c3aed) !important;
+    box-shadow: 0 4px 16px rgba(168, 85, 247, 0.35) !important;
+}
+
+.tutorial-icon--other {
+    background: linear-gradient(135deg, #14b8a6, #0d9488) !important;
+    box-shadow: 0 4px 16px rgba(20, 184, 166, 0.35) !important;
+}
+
 /* Tutorials List */
 .tutorials-list {
     display: flex;
     flex-direction: column;
     gap: 1rem;
-    margin-bottom: 2rem;
+    margin-bottom: 0;
 }
 
 /* Tutorial Card Mobile */
@@ -428,3 +481,4 @@
 }
 </style>
 {% endblock %}
+

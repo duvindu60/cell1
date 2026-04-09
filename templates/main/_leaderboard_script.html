@@ -1,0 +1,292 @@
+<script>
+(function () {
+  const loadingEl = document.getElementById('lbLoading');
+  const errorEl = document.getElementById('lbError');
+  const emptyEl = document.getElementById('lbEmpty');
+  const periodPicker = document.getElementById('periodPicker');
+  const cards = ['myStatsCard', 'achievementsCard', 'tasksCard', 'podiumCard', 'topListCard'];
+  const TASK_RING_COLORS = ['#f97316', '#38bdf8', '#fb7185', '#a78bfa', '#4ade80'];
+
+  function currentPeriod() {
+    const d = new Date();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    return d.getFullYear() + '-' + m;
+  }
+
+  function esc(v) {
+    return String(v || '').replace(/[&<>"']/g, (s) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+  }
+
+  function formatTier(t) {
+    if (t == null || t === '') return 'Unranked';
+    const s = String(t).trim();
+    return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+  }
+
+  const HERO_CRYSTAL_VARIANTS = ['platinum', 'gold', 'silver', 'obsidian', 'muted'];
+
+  function resolveRank(me, leaders) {
+    const raw = me.rank;
+    if (raw != null && raw !== '') {
+      const n = Number(raw);
+      return Number.isFinite(n) ? n : null;
+    }
+    const uid = me.leader_user_id;
+    if (uid == null || !leaders || !leaders.length) return null;
+    const hit = leaders.find((x) => String(x.leader_user_id) === String(uid));
+    if (!hit) return null;
+    const lr = hit.rank;
+    if (lr == null || lr === '') return null;
+    const n = Number(lr);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function resolveCrystalVariant(rank, tierStr) {
+    if (rank === 1) return 'platinum';
+    if (rank === 2) return 'gold';
+    if (rank === 3) return 'silver';
+    if (rank != null && rank >= 4) return 'obsidian';
+    const t = String(tierStr || '').toLowerCase();
+    if (t.includes('platinum')) return 'platinum';
+    if (t.includes('gold')) return 'gold';
+    if (t.includes('silver')) return 'silver';
+    return 'muted';
+  }
+
+  function applyHeroCrystal(me, leaders) {
+    const card = document.getElementById('myStatsCard');
+    const medalWrap = document.getElementById('heroRankMedal');
+    if (!card || !medalWrap) return;
+
+    const rank = resolveRank(me, leaders);
+    const tierLabel = formatTier(me.tier);
+    const variant = resolveCrystalVariant(rank, me.tier);
+
+    HERO_CRYSTAL_VARIANTS.forEach((v) => card.classList.remove('hero-crystal--' + v));
+    card.classList.add('hero-crystal--' + variant);
+
+    let medalMod = 'muted';
+    let title = 'No rank';
+    if (rank === 1) {
+      medalMod = 'platinum';
+      title = 'Platinum · rank 1';
+    } else if (rank === 2) {
+      medalMod = 'gold';
+      title = 'Gold · rank 2';
+    } else if (rank === 3) {
+      medalMod = 'silver';
+      title = 'Silver · rank 3';
+    } else if (rank != null && rank >= 4) {
+      medalMod = 'default';
+      title = 'Rank ' + rank;
+    } else if (variant === 'platinum') {
+      medalMod = 'platinum';
+      title = tierLabel + ' tier';
+    } else if (variant === 'gold') {
+      medalMod = 'gold';
+      title = tierLabel + ' tier';
+    } else if (variant === 'silver') {
+      medalMod = 'silver';
+      title = tierLabel + ' tier';
+    }
+
+    medalWrap.title = title;
+    medalWrap.innerHTML = '<i class="fas fa-medal lb-medal-icon lb-medal--' + medalMod + '" aria-hidden="true"></i>';
+  }
+
+  function showState({ loading, error, empty }) {
+    loadingEl.style.display = loading ? 'block' : 'none';
+    errorEl.style.display = error ? 'block' : 'none';
+    emptyEl.style.display = empty ? 'block' : 'none';
+    cards.forEach((id) => {
+      document.getElementById(id).style.display = (!loading && !error && !empty) ? 'block' : 'none';
+    });
+  }
+
+  function mergeTasks(defs, progress) {
+    const pById = {};
+    (progress || []).forEach((p) => {
+      const k = p.task_def_id != null ? p.task_def_id : p.task_definition_id;
+      if (k != null) pById[k] = p;
+    });
+    return (defs || []).map((d) => {
+      const defId = d.id != null ? d.id : d.task_def_id;
+      const p = (defId != null ? pById[defId] : null) || {};
+      const current = Number(p.current_progress || p.progress || 0);
+      const target = Number(p.target_progress || d.target_progress || d.max_progress || 1);
+      const pct = Math.max(0, Math.min(100, Math.round((current / Math.max(1, target)) * 100)));
+      const points = d.points_reward || d.exp_reward || d.reward_points || 10;
+      return { name: d.name || d.title || 'Task', current, target, pct, points };
+    });
+  }
+
+  async function fetchJson(url) {
+    const res = await fetch(url, { credentials: 'same-origin' });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || 'Request failed');
+    }
+    return data;
+  }
+
+  function setMyAvatar(url) {
+    const img = document.getElementById('myAvatarImg');
+    const fb = document.getElementById('myAvatarFallback');
+    if (url) {
+      img.src = url;
+      img.onload = function () { img.style.display = 'block'; fb.style.display = 'none'; };
+      img.onerror = function () { img.style.display = 'none'; fb.style.display = 'flex'; };
+    } else {
+      img.style.display = 'none';
+      fb.style.display = 'flex';
+    }
+  }
+
+  function achievementLabel(a) {
+    return a.label || a.name || a.title || a.key || a.slug || 'Achievement';
+  }
+
+  function renderAchievements(achievements, defs) {
+    const row = document.getElementById('achievementsRow');
+    const palette = ['bronze', 'silver', 'gold', 'blue', 'green'];
+    if (achievements && achievements.length > 0) {
+      row.innerHTML = achievements.map((a, i) => {
+        const cls = palette[i % palette.length];
+        const inner = a.icon ? esc(a.icon) : '<i class="fas fa-star"></i>';
+        return `<div class="shield ${cls}" title="${esc(achievementLabel(a))}">${inner}</div>`;
+      }).join('');
+      return;
+    }
+    if (defs && defs.length > 0) {
+      row.innerHTML =
+        '<p class="ach-empty achievements-hint">No unlocks this period yet — available achievements:</p>' +
+        defs.map((d) => {
+          const label = achievementLabel(d);
+          return `<div class="shield locked" title="${esc(label)} (locked)"><i class="fas fa-lock"></i></div>`;
+        }).join('');
+      return;
+    }
+    row.innerHTML =
+      '<p class="ach-empty">No achievements yet. Ensure <code>leader_gamification_achievement_defs</code> has rows and earned data exists in <code>leader_gamification_achievements</code> for this period (migration + RLS / service role).</p>';
+  }
+
+  function renderTasks(tasks) {
+    const list = document.getElementById('tasksList');
+    if (!tasks.length) {
+      list.innerHTML =
+        '<p class="ach-empty">No task definitions loaded. Add rows to <code>leader_gamification_task_defs</code> (Portal schema) or legacy <code>leader_gamification_task_definitions</code>, and verify <code>SUPABASE_SERVICE_ROLE_KEY</code> / RLS.</p>';
+      return;
+    }
+    list.innerHTML = tasks.map((t, i) => {
+      const ring = TASK_RING_COLORS[i % TASK_RING_COLORS.length];
+      return `<div class="task-card">
+        <div class="task-ring" style="--pct:${t.pct};--ring:${ring}">
+          <div class="task-ring-inner">${t.current}/${t.target}</div>
+        </div>
+        <div class="task-body">
+          <span class="task-kind">Lesson</span>
+          <span class="task-title">${esc(t.name)}</span>
+        </div>
+        <span class="task-exp">${t.points} Exp</span>
+      </div>`;
+    }).join('');
+  }
+
+  function renderPodium(top) {
+    const top3 = top.slice(0, 3);
+    const rankMap = {};
+    top3.forEach((i) => { rankMap[Number(i.rank)] = i; });
+    const layout = [
+      { key: 2, cls: 'second' },
+      { key: 1, cls: 'first' },
+      { key: 3, cls: 'third' }
+    ];
+    document.getElementById('podium').innerHTML = layout.map(({ key, cls }) => {
+      const p = rankMap[key];
+      if (!p) {
+        return `<div class="podium-col empty ${cls}"><span style="color:#64748b;font-size:0.75rem;">—</span></div>`;
+      }
+      const av = p.avatar_url ? `<img class="podium-avatar" src="${esc(p.avatar_url)}" alt="" onerror="this.style.visibility='hidden'"/>` : `<div class="podium-avatar" style="display:flex;align-items:center;justify-content:center;color:#94a3b8"><i class="fas fa-user"></i></div>`;
+      return `<div class="podium-col ${cls}">
+        <div class="podium-avatar-wrap">
+          ${av}
+          <span class="podium-rank-badge">${key}</span>
+        </div>
+        <div class="podium-name">${esc(p.display_name)}</div>
+        <div class="podium-score">${Number(p.total_score || 0).toLocaleString()}</div>
+      </div>`;
+    }).join('');
+  }
+
+  function render(me, top) {
+    document.getElementById('myName').textContent = 'Hello, ' + (me.display_name || 'Leader');
+    document.getElementById('myTier').textContent = formatTier(me.tier);
+    document.getElementById('myScore').textContent = Number(me.total_score || 0).toLocaleString();
+    setMyAvatar(me.avatar_url || '');
+    applyHeroCrystal(me, top);
+
+    const topScore = Number(top[0] && top[0].total_score) || 0;
+    const myScore = Number(me.total_score || 0);
+    // Compare to #1 when leaderboard exists; otherwise use a soft monthly cap so small scores don't fill the bar.
+    const SOFT_MONTHLY_CAP = 500;
+    let scorePct;
+    if (topScore > 0) {
+      scorePct = Math.max(6, Math.min(100, Math.round((myScore / topScore) * 100)));
+    } else if (myScore > 0) {
+      scorePct = Math.max(4, Math.min(100, Math.round((myScore / SOFT_MONTHLY_CAP) * 100)));
+    } else {
+      scorePct = 8;
+    }
+    document.getElementById('myScoreBar').style.width = scorePct + '%';
+
+    renderAchievements(me.achievements_period || [], me.achievement_defs_total || []);
+    renderTasks(mergeTasks(me.task_definitions, me.task_progress));
+    renderPodium(top);
+
+    const rest = top.filter((x) => Number(x.rank) >= 4 && Number(x.rank) <= 10);
+    document.getElementById('topList').innerHTML = rest.length
+      ? rest.map((r) => {
+          const av = r.avatar_url
+            ? `<img class="list-avatar" src="${esc(r.avatar_url)}" alt="" onerror="this.style.visibility='hidden'"/>`
+            : `<div class="list-avatar" style="display:flex;align-items:center;justify-content:center;color:#64748b"><i class="fas fa-user" style="font-size:0.85rem"></i></div>`;
+          return `<div class="list-row">
+            <div class="list-rank">${r.rank}</div>
+            ${av}
+            <div class="list-main"><div class="list-name">${esc(r.display_name)}</div></div>
+            <div class="list-score">${Number(r.total_score || 0).toLocaleString()}</div>
+          </div>`;
+        }).join('')
+      : '<p class="ach-empty">Not enough leaders yet for ranks 4–10.</p>';
+  }
+
+  async function load(period) {
+    showState({ loading: true, error: false, empty: false });
+    try {
+      const [meRes, topRes] = await Promise.all([
+        fetchJson('/api/leaderboard/me?period=' + encodeURIComponent(period)),
+        fetchJson('/api/leaderboard/top?period=' + encodeURIComponent(period) + '&limit=10')
+      ]);
+      const leaders = topRes.leaders || [];
+      const hasSnapshot = (meRes.rank != null && meRes.rank !== '') ||
+        Number(meRes.total_score || 0) > 0 ||
+        leaders.length > 0;
+      if (!hasSnapshot) {
+        showState({ loading: false, error: false, empty: true });
+        return;
+      }
+      render(meRes, leaders);
+      showState({ loading: false, error: false, empty: false });
+    } catch (err) {
+      errorEl.textContent = err.message || 'Failed to load leaderboard.';
+      showState({ loading: false, error: true, empty: false });
+    }
+  }
+
+  if (!periodPicker) return;
+  periodPicker.value = currentPeriod();
+  periodPicker.addEventListener('change', function () {
+    load(this.value || currentPeriod());
+  });
+  load(periodPicker.value);
+})();
+</script>

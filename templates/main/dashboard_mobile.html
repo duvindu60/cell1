@@ -9,13 +9,41 @@
             <div class="user-info">
                 <h1>Welcome back, {% if user.is_deputy %}Deputy Leader{% else %}{{ user.name or 'Leader' }}{% endif %}!</h1>
                 <p>{{ today.strftime('%A, %B %d, %Y') if today else 'Today' }}</p>
+                <div class="leaderboard-pill">
+                    <span class="dashboard-rank-tier">
+                        <span class="dashboard-rank-tier-label">Rank:</span>
+                        {% if leaderboard_stats.rank is not none %}
+                            {% set r = leaderboard_stats.rank %}
+                            {% if r == 1 %}
+                                <i class="fas fa-medal rank-medal-icon rank-medal-icon--platinum" aria-hidden="true" title="Platinum · rank 1"></i>
+                            {% elif r == 2 %}
+                                <i class="fas fa-medal rank-medal-icon rank-medal-icon--gold" aria-hidden="true" title="Gold · rank 2"></i>
+                            {% elif r == 3 %}
+                                <i class="fas fa-medal rank-medal-icon rank-medal-icon--silver" aria-hidden="true" title="Silver · rank 3"></i>
+                            {% else %}
+                                <i class="fas fa-medal rank-medal-icon rank-medal-icon--default" aria-hidden="true" title="Rank {{ r }}"></i>
+                            {% endif %}
+                        {% else %}
+                            <i class="fas fa-medal rank-medal-icon rank-medal-icon--muted" aria-hidden="true" title="No rank"></i>
+                        {% endif %}
+                    </span>
+                    <span>Pts: <strong>{{ leaderboard_stats.total_score if leaderboard_stats.total_score is not none else 0 }}</strong></span>
+                    <span>Position: <strong>{{ leaderboard_stats.position }}</strong></span>
+                </div>
             </div>
-            <div class="profile-button">
-                <a href="{{ url_for('main.profile') }}" class="profile-link">
-                    <div class="profile-icon">
-                        <i class="fas fa-user"></i>
+            <div class="header-actions">
+                <a href="{{ url_for('auth.logout') }}" class="logout-link" aria-label="Log out" title="Log out">
+                    <div class="logout-icon">
+                        <i class="fas fa-sign-out-alt" aria-hidden="true"></i>
                     </div>
                 </a>
+                <div class="profile-button">
+                    <a href="{{ url_for('main.profile') }}" class="profile-link">
+                        <div class="profile-icon">
+                            <i class="fas fa-user"></i>
+                        </div>
+                    </a>
+                </div>
             </div>
         </div>
     </div>
@@ -62,8 +90,23 @@
                 </div>
                 <div class="stat-subtitle">{{ latest_attendance.meeting_date if latest_attendance else 'No data' }}</div>
             </div>
+
         </div>
     </div>
+
+    {% if attendance_countdown %}
+    <div class="attendance-marking-countdown-strip"
+         id="attendanceMarkingCountdownStrip"
+         data-opens-iso="{{ attendance_countdown.opens_iso }}"
+         data-closes-iso="{{ attendance_countdown.closes_iso }}"
+         aria-live="polite">
+        <div class="marking-countdown-row marking-countdown-row--opens" id="markingCountdownRow">
+            <i class="fas fa-unlock-alt" id="markingCountdownIcon" aria-hidden="true"></i>
+            <span class="marking-countdown-label" id="markingCountdownLabel">Marking opens in:</span>
+            <strong class="marking-countdown-value" id="markingCountdownValue">—</strong>
+        </div>
+    </div>
+    {% endif %}
 
     <!-- Next Meeting Card -->
     <div class="meeting-section">
@@ -206,7 +249,7 @@
 <a href="{{ url_for('main.members') }}" class="nav-link"><i class="fas fa-users"></i><span>Members</span></a>
 <a href="{{ url_for('main.profile') }}" class="nav-link"><i class="fas fa-user"></i><span>Profile</span></a>
 <a href="{{ url_for('main.meeting_dates') }}" class="nav-link"><i class="fas fa-user-check"></i><span>Attendance</span></a>
-<a href="{{ url_for('auth.logout') }}" class="nav-link"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
+<a href="{{ url_for('main.leaderboard') }}" class="nav-link"><i class="fas fa-medal"></i><span>Leaderboard</span></a>
 {% endif %}
 {% endblock %}
 
@@ -257,6 +300,133 @@
     font-weight: 500;
 }
 
+.leaderboard-pill {
+    margin-top: 0.55rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    flex-wrap: wrap;
+    padding: 0.4rem 0.65rem;
+    border-radius: 999px;
+    background: rgba(30, 64, 175, 0.28);
+    border: 1px solid rgba(96, 165, 250, 0.45);
+    color: #bfdbfe;
+    font-size: 0.74rem;
+    line-height: 1;
+}
+
+.leaderboard-pill strong {
+    color: #ffffff;
+}
+
+.dashboard-rank-tier {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.28rem;
+    flex-wrap: wrap;
+}
+
+.dashboard-rank-tier-label {
+    color: #bfdbfe;
+}
+
+.leaderboard-pill .rank-medal-icon {
+    font-size: 1.55rem;
+    line-height: 1;
+    vertical-align: middle;
+}
+
+.rank-medal-icon--platinum {
+    color: #f5f3ff;
+    animation: rankMedalPulsePlatinum 2.4s ease-in-out infinite;
+}
+
+.rank-medal-icon--gold {
+    color: #fcd34d;
+    animation: rankMedalPulseGold 2.4s ease-in-out infinite;
+}
+
+.rank-medal-icon--silver {
+    color: #e2e8f0;
+    animation: rankMedalPulseSilver 2.4s ease-in-out infinite;
+}
+
+.rank-medal-icon--default {
+    color: #94a3b8;
+    filter: drop-shadow(0 0 2px rgba(148, 163, 184, 0.4));
+    font-size: 1.38rem;
+}
+
+.rank-medal-icon--muted {
+    color: #64748b;
+    font-size: 1.28rem;
+    opacity: 0.85;
+}
+
+@keyframes rankMedalPulsePlatinum {
+    0%, 100% {
+        transform: scale(1);
+        filter: drop-shadow(0 0 4px rgba(196, 181, 253, 0.8)) drop-shadow(0 0 8px rgba(167, 139, 250, 0.4));
+    }
+    50% {
+        transform: scale(1.08);
+        filter: drop-shadow(0 0 8px rgba(237, 233, 254, 0.95)) drop-shadow(0 0 14px rgba(167, 139, 250, 0.65));
+    }
+}
+
+@keyframes rankMedalPulseGold {
+    0%, 100% {
+        transform: scale(1);
+        filter: drop-shadow(0 0 4px rgba(251, 191, 36, 0.75)) drop-shadow(0 0 6px rgba(245, 158, 11, 0.35));
+    }
+    50% {
+        transform: scale(1.08);
+        filter: drop-shadow(0 0 9px rgba(252, 211, 77, 0.95)) drop-shadow(0 0 14px rgba(245, 158, 11, 0.55));
+    }
+}
+
+@keyframes rankMedalPulseSilver {
+    0%, 100% {
+        transform: scale(1);
+        filter: drop-shadow(0 0 3px rgba(226, 232, 240, 0.85)) drop-shadow(0 0 6px rgba(148, 163, 184, 0.35));
+    }
+    50% {
+        transform: scale(1.08);
+        filter: drop-shadow(0 0 7px rgba(241, 245, 249, 0.95)) drop-shadow(0 0 12px rgba(148, 163, 184, 0.5));
+    }
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex-shrink: 0;
+}
+
+.logout-link {
+    text-decoration: none;
+    transition: transform 0.3s ease;
+}
+
+.logout-link:hover {
+    text-decoration: none;
+    transform: scale(1.05);
+}
+
+.logout-icon {
+    width: 50px;
+    height: 50px;
+    background: linear-gradient(135deg, #64748b, #475569);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    color: white;
+    box-shadow: 0 4px 16px rgba(100, 116, 139, 0.35);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+}
+
 .profile-link {
     text-decoration: none;
     transition: transform 0.3s ease;
@@ -285,8 +455,13 @@
    STATS SECTION - CLEAN 2x2 GRID
    =========================================== */
 .stats-section {
-    margin-bottom: 1.5rem !important;
+    margin-bottom: 0.25rem !important;
     padding-bottom: 0 !important;
+}
+
+/* Tighter gap to countdown strip; keep normal gap when strip is absent */
+.stats-section:not(:has(+ .attendance-marking-countdown-strip)) {
+    margin-bottom: 1.25rem !important;
 }
 
 .stats-grid {
@@ -380,6 +555,62 @@
     margin-top: 0.25rem !important;
     line-height: 1.2 !important;
     display: block !important;
+}
+
+/* Match stat-card / meeting-card weight so the strip doesn’t feel thin or uneven */
+.attendance-marking-countdown-strip {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    margin: 0 0 0.75rem 0 !important;
+    padding: 1rem 1.1rem !important;
+    background: linear-gradient(135deg, #1e293b 0%, #334155 100%) !important;
+    border: 1px solid #475569 !important;
+    border-radius: 16px !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2) !important;
+    font-size: 0.8rem !important;
+    text-align: center !important;
+}
+
+.marking-countdown-row {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-wrap: wrap !important;
+    gap: 0.4rem 0.55rem !important;
+    text-align: center !important;
+}
+
+.marking-countdown-row i {
+    width: 1.1rem !important;
+    text-align: center !important;
+    opacity: 0.95 !important;
+    flex-shrink: 0 !important;
+}
+
+.marking-countdown-row--opens i,
+.marking-countdown-row--opens .marking-countdown-label {
+    color: #4ade80 !important;
+}
+
+.marking-countdown-row--opens .marking-countdown-value {
+    color: #86efac !important;
+    font-weight: 700 !important;
+}
+
+.marking-countdown-row--closes i,
+.marking-countdown-row--closes .marking-countdown-label {
+    color: #facc15 !important;
+}
+
+.marking-countdown-row--closes .marking-countdown-value {
+    color: #fde047 !important;
+    font-weight: 700 !important;
+}
+
+.marking-countdown-label {
+    font-weight: 500 !important;
+    color: #cbd5e1 !important;
 }
 
 /* Status indicators */
@@ -866,6 +1097,12 @@
         font-size: 18px;
     }
     
+    .logout-icon {
+        width: 45px;
+        height: 45px;
+        font-size: 16px;
+    }
+    
     .stats-grid {
         gap: 0.75rem;
         grid-template-columns: repeat(3, 1fr);
@@ -993,7 +1230,8 @@
     .stat-card,
     .action-card,
     .meeting-btn,
-    .profile-link {
+    .profile-link,
+    .logout-link {
         transition: none;
     }
     
@@ -1027,5 +1265,64 @@ function toggleQuickAccess(type) {
         chevron.classList.remove('rotated');
     }
 }
+
+{% if attendance_countdown %}
+(function() {
+    function formatMarkingDuration(ms) {
+        if (ms <= 0) return '0 mins';
+        var totalMins = Math.floor(ms / 60000);
+        var days = Math.floor(totalMins / (60 * 24));
+        var hours = Math.floor((totalMins % (60 * 24)) / 60);
+        var mins = totalMins % 60;
+        var parts = [];
+        if (days > 0) parts.push(days + ' day' + (days === 1 ? '' : 's'));
+        if (hours > 0) parts.push(hours + 'h');
+        parts.push(mins + 'mins');
+        return parts.join(' ');
+    }
+    function rollToCurrentWindow(opens, closes, now) {
+        var o = new Date(opens.getTime());
+        var c = new Date(closes.getTime());
+        while (c.getTime() <= now) {
+            o.setDate(o.getDate() + 7);
+            o.setHours(0, 0, 0, 0);
+            c.setDate(c.getDate() + 7);
+            c.setHours(23, 59, 59, 0);
+        }
+        return { opens: o, closes: c };
+    }
+    function tickMarkingCountdown() {
+        var strip = document.getElementById('attendanceMarkingCountdownStrip');
+        var row = document.getElementById('markingCountdownRow');
+        var icon = document.getElementById('markingCountdownIcon');
+        var label = document.getElementById('markingCountdownLabel');
+        var valueEl = document.getElementById('markingCountdownValue');
+        if (!strip || !row || !icon || !label || !valueEl) return;
+        var rawOpen = new Date(strip.getAttribute('data-opens-iso'));
+        var rawClose = new Date(strip.getAttribute('data-closes-iso'));
+        var now = Date.now();
+        if (isNaN(rawOpen.getTime()) || isNaN(rawClose.getTime())) {
+            valueEl.textContent = '—';
+            return;
+        }
+        var w = rollToCurrentWindow(rawOpen, rawClose, now);
+        var tOpen = w.opens.getTime();
+        var tClose = w.closes.getTime();
+        if (now < tOpen) {
+            row.className = 'marking-countdown-row marking-countdown-row--opens';
+            icon.className = 'fas fa-unlock-alt';
+            label.textContent = 'Marking opens in:';
+            valueEl.textContent = formatMarkingDuration(tOpen - now);
+        } else {
+            row.className = 'marking-countdown-row marking-countdown-row--closes';
+            icon.className = 'fas fa-lock';
+            label.textContent = 'Marking closes in:';
+            valueEl.textContent = formatMarkingDuration(Math.max(0, tClose - now));
+        }
+    }
+    tickMarkingCountdown();
+    setInterval(tickMarkingCountdown, 1000);
+})();
+{% endif %}
 </script>
 {% endblock %}

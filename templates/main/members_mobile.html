@@ -42,10 +42,32 @@
                                             <i class="fas fa-user-shield" style="color: #58a6ff; margin-left: 8px; font-size: 0.9em;" title="Deputy Leader"></i>
                                         {% endif %}
                                     </div>
+                                    {% if member.delete_request_pending or member.flag_issue_pending or member.deputy_removal_pending %}
+                                    <div class="member-pending-badges" aria-label="Pending portal actions">
+                                        {% if member.delete_request_pending %}
+                                        <span class="badge-pending badge-pending--delete" title="Delete request awaiting review">Delete pending</span>
+                                        {% endif %}
+                                        {% if member.flag_issue_pending %}
+                                        <span class="badge-pending badge-pending--flag" title="Flag awaiting review">Flag pending</span>
+                                        {% endif %}
+                                        {% if member.deputy_removal_pending %}
+                                        <span class="badge-pending badge-pending--deputy" title="Deputy change awaiting portal approval">Deputy change pending</span>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
                                     <div class="member-info">{{ member.phone_number or 'No phone' }}</div>
                                     <div class="member-email">{{ member.email or 'No email' }}</div>
                                 </div>
                                 <div class="member-actions-inline">
+                                    {% if not user.is_deputy and member.deputy_leader %}
+                                        {% if member.deputy_removal_pending %}
+                                        <span class="btn-deputy-pending" title="Waiting for cell portal"><i class="fas fa-hourglass-half"></i> Pending</span>
+                                        {% else %}
+                                        <button type="button" class="btn-change-deputy" onclick="event.preventDefault(); event.stopPropagation(); requestDeputyRemoval('{{ member.id }}', this);" title="Request portal approval to change deputy">
+                                            <i class="fas fa-user-shield"></i> Change
+                                        </button>
+                                        {% endif %}
+                                    {% endif %}
                                     {% if can_assign_deputy and not member.deputy_leader %}
                                     <button type="button" class="btn-set-deputy" onclick="event.preventDefault(); event.stopPropagation(); setDeputyLeader('{{ member.id }}', this);" title="Set as Deputy Leader">
                                         <i class="fas fa-user-shield"></i> Deputy
@@ -78,6 +100,31 @@
 
 {% block extra_js %}
 <script>
+function requestDeputyRemoval(memberId, btn) {
+    if (btn.disabled) return;
+    if (!confirm('Send a request to the cell portal to remove this deputy? After approval you can assign a new deputy.')) return;
+    btn.disabled = true;
+    var url = "{{ url_for('main.request_deputy_removal', member_id='__ID__') }}".replace('__ID__', memberId);
+    fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        body: '{}'
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.success) {
+            window.location.reload();
+        } else {
+            alert(data.message || 'Request failed');
+            btn.disabled = false;
+        }
+    })
+    .catch(function() {
+        alert('Request failed. Please try again.');
+        btn.disabled = false;
+    });
+}
+
 function setDeputyLeader(memberId, btn) {
     if (btn.disabled) return;
     btn.disabled = true;
@@ -110,13 +157,13 @@ function setDeputyLeader(memberId, btn) {
 <span class="nav-link nav-link-disabled"><i class="fas fa-users"></i><span>Members</span></span>
 <span class="nav-link nav-link-disabled"><i class="fas fa-user"></i><span>Profile</span></span>
 <a href="{{ url_for('main.meeting_dates') }}" class="nav-link"><i class="fas fa-user-check"></i><span>Attendance</span></a>
-<a href="{{ url_for('auth.logout') }}" class="nav-link"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
+<a href="{{ url_for('main.leaderboard') }}" class="nav-link"><i class="fas fa-medal"></i><span>Leaderboard</span></a>
 {% else %}
 <a href="{{ url_for('main.index') }}" class="nav-link"><i class="fas fa-home"></i><span>Home</span></a>
 <a href="{{ url_for('main.members') }}" class="nav-link active"><i class="fas fa-users"></i><span>Members</span></a>
 <a href="{{ url_for('main.profile') }}" class="nav-link"><i class="fas fa-user"></i><span>Profile</span></a>
 <a href="{{ url_for('main.meeting_dates') }}" class="nav-link"><i class="fas fa-user-check"></i><span>Attendance</span></a>
-<a href="{{ url_for('auth.logout') }}" class="nav-link"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
+<a href="{{ url_for('main.leaderboard') }}" class="nav-link"><i class="fas fa-medal"></i><span>Leaderboard</span></a>
 {% endif %}
 {% endblock %}
 
@@ -412,6 +459,76 @@ function setDeputyLeader(memberId, btn) {
     text-overflow: ellipsis;
 }
 
+.member-pending-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-bottom: 0.3rem;
+}
+
+.badge-pending {
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 0.18rem 0.4rem;
+    border-radius: 6px;
+    line-height: 1.2;
+}
+
+.badge-pending--delete {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.badge-pending--flag {
+    background: rgba(248, 113, 113, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(248, 113, 113, 0.35);
+}
+
+.badge-pending--deputy {
+    background: rgba(96, 165, 250, 0.15);
+    color: #93c5fd;
+    border: 1px solid rgba(96, 165, 250, 0.35);
+}
+
+.btn-change-deputy {
+    flex-shrink: 0;
+    margin-right: 0.35rem;
+    padding: 0.3rem 0.5rem;
+    font-size: 0.68rem;
+    font-weight: 600;
+    border-radius: 8px;
+    border: 1px solid rgba(88, 166, 255, 0.45);
+    background: rgba(88, 166, 255, 0.12);
+    color: #58a6ff;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.btn-change-deputy:hover {
+    background: rgba(88, 166, 255, 0.22);
+}
+
+.btn-change-deputy:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn-deputy-pending {
+    flex-shrink: 0;
+    margin-right: 0.35rem;
+    padding: 0.3rem 0.5rem;
+    font-size: 0.65rem;
+    font-weight: 600;
+    border-radius: 8px;
+    border: 1px solid rgba(139, 148, 158, 0.4);
+    color: #8b949e;
+    white-space: nowrap;
+}
+
 .member-info {
     color: #8b949e;
     font-size: 0.85rem;
@@ -522,3 +639,4 @@ function setDeputyLeader(memberId, btn) {
 .member-item:nth-child(5) { animation-delay: 0.5s; }
 </style>
 {% endblock %}
+

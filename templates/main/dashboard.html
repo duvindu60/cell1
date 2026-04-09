@@ -10,12 +10,36 @@
     <!-- Welcome Section -->
     <div class="welcome-section">
         <div class="welcome-card">
+            <a href="{{ url_for('auth.logout') }}" class="welcome-logout-btn" aria-label="Log out" title="Log out">
+                <i class="fas fa-sign-out-alt" aria-hidden="true"></i>
+            </a>
             <div class="welcome-icon">
                 <i class="fas fa-home"></i>
             </div>
             <div class="welcome-content">
                 <h1>Welcome back, {% if user.is_deputy %}Deputy Leader{% else %}{{ user.name or 'Leader' }}{% endif %}!</h1>
                 <p>Manage your cell group activities and members</p>
+                <div class="desktop-leaderboard-pill">
+                    <span class="dashboard-rank-tier">
+                        <span class="dashboard-rank-tier-label">Rank:</span>
+                        {% if leaderboard_stats.rank is not none %}
+                            {% set r = leaderboard_stats.rank %}
+                            {% if r == 1 %}
+                                <i class="fas fa-medal rank-medal-icon rank-medal-icon--platinum" aria-hidden="true" title="Platinum · rank 1"></i>
+                            {% elif r == 2 %}
+                                <i class="fas fa-medal rank-medal-icon rank-medal-icon--gold" aria-hidden="true" title="Gold · rank 2"></i>
+                            {% elif r == 3 %}
+                                <i class="fas fa-medal rank-medal-icon rank-medal-icon--silver" aria-hidden="true" title="Silver · rank 3"></i>
+                            {% else %}
+                                <i class="fas fa-medal rank-medal-icon rank-medal-icon--default" aria-hidden="true" title="Rank {{ r }}"></i>
+                            {% endif %}
+                        {% else %}
+                            <i class="fas fa-medal rank-medal-icon rank-medal-icon--muted" aria-hidden="true" title="No rank"></i>
+                        {% endif %}
+                    </span>
+                    <span>Pts: <strong>{{ leaderboard_stats.total_score if leaderboard_stats.total_score is not none else 0 }}</strong></span>
+                    <span>Position: <strong>{{ leaderboard_stats.position }}</strong></span>
+                </div>
         </div>
         </div>
     </div>
@@ -108,6 +132,20 @@
             </div>
         </div>
 </div>
+
+    {% if attendance_countdown %}
+    <div class="attendance-marking-countdown-strip"
+         id="attendanceMarkingCountdownStrip"
+         data-opens-iso="{{ attendance_countdown.opens_iso }}"
+         data-closes-iso="{{ attendance_countdown.closes_iso }}"
+         aria-live="polite">
+        <div class="marking-countdown-row marking-countdown-row--opens" id="markingCountdownRow">
+            <i class="fas fa-unlock-alt" id="markingCountdownIcon" aria-hidden="true"></i>
+            <span class="marking-countdown-label" id="markingCountdownLabel">Marking opens in:</span>
+            <strong class="marking-countdown-value" id="markingCountdownValue">—</strong>
+        </div>
+    </div>
+    {% endif %}
 
     <!-- Main Content Grid -->
     <div class="main-content-grid">
@@ -315,70 +353,6 @@
 <a href="{{ url_for('auth.logout') }}" class="nav-link"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
 {% endif %}
 {% endblock %}
-
-<script>
-function toggleQuickAccess(type) {
-    const list = document.getElementById(type + '-list');
-    const chevron = document.getElementById(type + '-chevron');
-    
-    if (list.style.display === 'none') {
-        list.style.display = 'grid';
-        chevron.classList.add('rotated');
-    } else {
-        list.style.display = 'none';
-        chevron.classList.remove('rotated');
-    }
-}
-
-// Attendance Countdown Timer
-{% if attendance_reminder and not attendance_reminder.is_past_deadline %}
-(function() {
-    const deadline = new Date('{{ attendance_reminder.deadline_iso }}');
-    
-    function updateCountdown() {
-        const now = new Date();
-        const timeRemaining = deadline - now;
-        
-        if (timeRemaining <= 0) {
-            // Deadline passed
-            document.getElementById('countdownTimer').innerHTML = '<span style="color: #ef4444; font-weight: 700;">DEADLINE PASSED</span>';
-            const banner = document.getElementById('attendanceReminderBanner');
-            if (banner) {
-                banner.classList.add('urgent');
-            }
-            return;
-        }
-        
-        const hours = Math.floor(timeRemaining / (1000 * 60 * 60));
-        const minutes = Math.floor((timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
-        
-        const hoursEl = document.getElementById('hoursRemaining');
-        const minutesEl = document.getElementById('minutesRemaining');
-        
-        if (hoursEl) hoursEl.textContent = String(hours).padStart(2, '0');
-        if (minutesEl) minutesEl.textContent = String(minutes).padStart(2, '0');
-        
-        // Update urgency classes
-        const banner = document.getElementById('attendanceReminderBanner');
-        if (banner) {
-            if (hours < 6) {
-                banner.classList.add('urgent');
-                banner.classList.remove('approaching');
-            } else if (hours < 24) {
-                banner.classList.add('approaching');
-                banner.classList.remove('urgent');
-            }
-        }
-    }
-    
-    // Update immediately
-    updateCountdown();
-    
-    // Update every minute
-    setInterval(updateCountdown, 60000);
-})();
-{% endif %}
-</script>
 
 {% block extra_css %}
 <style>
@@ -626,6 +600,33 @@ function toggleQuickAccess(type) {
     border-radius: 20px 20px 0 0;
 }
 
+.welcome-logout-btn {
+    position: absolute;
+    top: 1.25rem;
+    right: 1.25rem;
+    z-index: 2;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #e2e8f0;
+    background: rgba(15, 23, 42, 0.55);
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    text-decoration: none;
+    font-size: 1.1rem;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.welcome-logout-btn:hover {
+    color: #ffffff;
+    background: rgba(71, 85, 105, 0.75);
+    border-color: rgba(148, 163, 184, 0.55);
+    text-decoration: none;
+    transform: scale(1.05);
+}
+
 .welcome-icon {
     width: 80px;
     height: 80px;
@@ -653,6 +654,101 @@ function toggleQuickAccess(type) {
     font-size: 1.25rem;
     margin: 0;
     line-height: 1.4;
+}
+
+.desktop-leaderboard-pill {
+    margin-top: 0.9rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    padding: 0.55rem 0.9rem;
+    border-radius: 999px;
+    background: rgba(30, 64, 175, 0.25);
+    border: 1px solid rgba(96, 165, 250, 0.45);
+    color: #bfdbfe;
+    font-size: 0.9rem;
+}
+
+.desktop-leaderboard-pill strong {
+    color: #ffffff;
+}
+
+.dashboard-rank-tier {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+}
+
+.dashboard-rank-tier-label {
+    color: #bfdbfe;
+}
+
+.rank-medal-icon {
+    font-size: 1.75rem;
+    line-height: 1;
+    vertical-align: middle;
+}
+
+.rank-medal-icon--platinum {
+    color: #f5f3ff;
+    animation: rankMedalPulsePlatinum 2.4s ease-in-out infinite;
+}
+
+.rank-medal-icon--gold {
+    color: #fcd34d;
+    animation: rankMedalPulseGold 2.4s ease-in-out infinite;
+}
+
+.rank-medal-icon--silver {
+    color: #e2e8f0;
+    animation: rankMedalPulseSilver 2.4s ease-in-out infinite;
+}
+
+.rank-medal-icon--default {
+    color: #94a3b8;
+    filter: drop-shadow(0 0 2px rgba(148, 163, 184, 0.4));
+    font-size: 1.55rem;
+}
+
+.rank-medal-icon--muted {
+    color: #64748b;
+    font-size: 1.45rem;
+    opacity: 0.85;
+}
+
+@keyframes rankMedalPulsePlatinum {
+    0%, 100% {
+        transform: scale(1);
+        filter: drop-shadow(0 0 4px rgba(196, 181, 253, 0.8)) drop-shadow(0 0 8px rgba(167, 139, 250, 0.4));
+    }
+    50% {
+        transform: scale(1.08);
+        filter: drop-shadow(0 0 8px rgba(237, 233, 254, 0.95)) drop-shadow(0 0 14px rgba(167, 139, 250, 0.65));
+    }
+}
+
+@keyframes rankMedalPulseGold {
+    0%, 100% {
+        transform: scale(1);
+        filter: drop-shadow(0 0 4px rgba(251, 191, 36, 0.75)) drop-shadow(0 0 6px rgba(245, 158, 11, 0.35));
+    }
+    50% {
+        transform: scale(1.08);
+        filter: drop-shadow(0 0 9px rgba(252, 211, 77, 0.95)) drop-shadow(0 0 14px rgba(245, 158, 11, 0.55));
+    }
+}
+
+@keyframes rankMedalPulseSilver {
+    0%, 100% {
+        transform: scale(1);
+        filter: drop-shadow(0 0 3px rgba(226, 232, 240, 0.85)) drop-shadow(0 0 6px rgba(148, 163, 184, 0.35));
+    }
+    50% {
+        transform: scale(1.08);
+        filter: drop-shadow(0 0 7px rgba(241, 245, 249, 0.95)) drop-shadow(0 0 12px rgba(148, 163, 184, 0.5));
+    }
 }
 
 /* Stats Overview */
@@ -735,6 +831,64 @@ function toggleQuickAccess(type) {
     font-size: 1rem;
     margin: 0;
     line-height: 1.4;
+}
+
+/* Attendance marking countdown (after stat cards) — matches stat-card weight */
+.attendance-marking-countdown-strip {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    margin: -1.5rem 0 2rem 0;
+    padding: 1rem 1.25rem;
+    background: #1e293b;
+    border: 1px solid #475569;
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+.marking-countdown-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.4rem 0.6rem;
+    text-align: center;
+}
+
+.marking-countdown-row i {
+    width: 1.1rem;
+    text-align: center;
+    opacity: 0.95;
+    flex-shrink: 0;
+}
+
+.marking-countdown-row--opens i,
+.marking-countdown-row--opens .marking-countdown-label {
+    color: #4ade80;
+}
+
+.marking-countdown-row--opens .marking-countdown-value {
+    color: #86efac;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.marking-countdown-row--closes i,
+.marking-countdown-row--closes .marking-countdown-label {
+    color: #facc15;
+}
+
+.marking-countdown-row--closes .marking-countdown-value {
+    color: #fde047;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.marking-countdown-label {
+    font-weight: 500;
+    color: #cbd5e1;
 }
 
 /* Main Content Grid */
@@ -1159,6 +1313,131 @@ function toggleQuickAccess(type) {
 <a href="{{ url_for('main.members') }}" class="nav-link"><i class="fas fa-users"></i><span>Members</span></a>
 <a href="{{ url_for('main.profile') }}" class="nav-link"><i class="fas fa-user"></i><span>Profile</span></a>
 <a href="{{ url_for('main.meeting_dates') }}" class="nav-link"><i class="fas fa-user-check"></i><span>Attendance</span></a>
+<a href="{{ url_for('main.leaderboard') }}" class="nav-link"><i class="fas fa-medal"></i><span>Leaderboard</span></a>
 <a href="{{ url_for('auth.logout') }}" class="nav-link"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
 {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleQuickAccess(type) {
+    const list = document.getElementById(type + '-list');
+    const chevron = document.getElementById(type + '-chevron');
+
+    if (!list || !chevron) return;
+
+    if (list.style.display === 'none') {
+        list.style.display = 'grid';
+        chevron.classList.add('rotated');
+    } else {
+        list.style.display = 'none';
+        chevron.classList.remove('rotated');
+    }
+}
+
+{% if attendance_reminder and not attendance_reminder.is_past_deadline %}
+(function() {
+    const deadline = new Date('{{ attendance_reminder.deadline_iso }}');
+
+    function updateCountdown() {
+        const now = new Date();
+        const timeRemaining = deadline - now;
+
+        if (timeRemaining <= 0) {
+            const timerEl = document.getElementById('countdownTimer');
+            if (timerEl) {
+                timerEl.innerHTML = '<span style="color: #ef4444; font-weight: 700;">DEADLINE PASSED</span>';
+            }
+            const banner = document.getElementById('attendanceReminderBanner');
+            if (banner) {
+                banner.classList.add('urgent');
+            }
+            return;
+        }
+
+        const hours = Math.floor(timeRemaining / (1000 * 60 * 60));
+        const minutes = Math.floor((timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
+
+        const hoursEl = document.getElementById('hoursRemaining');
+        const minutesEl = document.getElementById('minutesRemaining');
+
+        if (hoursEl) hoursEl.textContent = String(hours).padStart(2, '0');
+        if (minutesEl) minutesEl.textContent = String(minutes).padStart(2, '0');
+
+        const banner = document.getElementById('attendanceReminderBanner');
+        if (banner) {
+            if (hours < 6) {
+                banner.classList.add('urgent');
+                banner.classList.remove('approaching');
+            } else if (hours < 24) {
+                banner.classList.add('approaching');
+                banner.classList.remove('urgent');
+            }
+        }
+    }
+
+    updateCountdown();
+    setInterval(updateCountdown, 60000);
+})();
+{% endif %}
+
+{% if attendance_countdown %}
+(function() {
+    function formatMarkingDuration(ms) {
+        if (ms <= 0) return '0 mins';
+        var totalMins = Math.floor(ms / 60000);
+        var days = Math.floor(totalMins / (60 * 24));
+        var hours = Math.floor((totalMins % (60 * 24)) / 60);
+        var mins = totalMins % 60;
+        var parts = [];
+        if (days > 0) parts.push(days + ' day' + (days === 1 ? '' : 's'));
+        if (hours > 0) parts.push(hours + 'h');
+        parts.push(mins + 'mins');
+        return parts.join(' ');
+    }
+    function rollToCurrentWindow(opens, closes, now) {
+        var o = new Date(opens.getTime());
+        var c = new Date(closes.getTime());
+        while (c.getTime() <= now) {
+            o.setDate(o.getDate() + 7);
+            o.setHours(0, 0, 0, 0);
+            c.setDate(c.getDate() + 7);
+            c.setHours(23, 59, 59, 0);
+        }
+        return { opens: o, closes: c };
+    }
+    function tickMarkingCountdown() {
+        var strip = document.getElementById('attendanceMarkingCountdownStrip');
+        var row = document.getElementById('markingCountdownRow');
+        var icon = document.getElementById('markingCountdownIcon');
+        var label = document.getElementById('markingCountdownLabel');
+        var valueEl = document.getElementById('markingCountdownValue');
+        if (!strip || !row || !icon || !label || !valueEl) return;
+        var rawOpen = new Date(strip.getAttribute('data-opens-iso'));
+        var rawClose = new Date(strip.getAttribute('data-closes-iso'));
+        var now = Date.now();
+        if (isNaN(rawOpen.getTime()) || isNaN(rawClose.getTime())) {
+            valueEl.textContent = '—';
+            return;
+        }
+        var w = rollToCurrentWindow(rawOpen, rawClose, now);
+        var tOpen = w.opens.getTime();
+        var tClose = w.closes.getTime();
+        if (now < tOpen) {
+            row.className = 'marking-countdown-row marking-countdown-row--opens';
+            icon.className = 'fas fa-unlock-alt';
+            label.textContent = 'Marking opens in:';
+            valueEl.textContent = formatMarkingDuration(tOpen - now);
+        } else {
+            row.className = 'marking-countdown-row marking-countdown-row--closes';
+            icon.className = 'fas fa-lock';
+            label.textContent = 'Marking closes in:';
+            valueEl.textContent = formatMarkingDuration(Math.max(0, tClose - now));
+        }
+    }
+    tickMarkingCountdown();
+    setInterval(tickMarkingCountdown, 1000);
+})();
+{% endif %}
+</script>
 {% endblock %}

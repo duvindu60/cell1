@@ -46,7 +46,7 @@ CREATE INDEX IF NOT EXISTS idx_flagged_issues_leader_status ON flagged_issues(le
 COMMENT ON TABLE flagged_issues IS 'Records issues flagged by leaders for cell members';
 COMMENT ON COLUMN flagged_issues.member_id IS 'ID of the cell member being flagged (UUID or string)';
 COMMENT ON COLUMN flagged_issues.leader_id IS 'ID of the leader who flagged the issue (UUID or string)';
-COMMENT ON COLUMN flagged_issues.issue_type IS 'Type of issue (e.g., attendance, behavior, spiritual, other)';
+COMMENT ON COLUMN flagged_issues.issue_type IS 'Type of issue (e.g., attendance, behavior, spiritual, other, delete_request, deputy_removal_request). Cell portal: on approving deputy_removal_request, set cell_members.deputy_leader=false and can_login=false for member_id.';
 COMMENT ON COLUMN flagged_issues.description IS 'Detailed description of the issue';
 COMMENT ON COLUMN flagged_issues.status IS 'Status of the issue: pending, reviewed, resolved, dismissed';
 COMMENT ON COLUMN flagged_issues.response IS 'Response or resolution to the flagged issue';
