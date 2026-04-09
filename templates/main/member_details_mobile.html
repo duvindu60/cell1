@@ -10,6 +10,19 @@
         </div>
         <h1>{{ member.name }}</h1>
         <p>Cell Member Details</p>
+        {% if delete_request_pending or flag_issue_pending or deputy_removal_pending %}
+        <div class="member-pending-banner" role="status">
+            {% if delete_request_pending %}
+            <span class="pending-pill pending-pill--delete"><i class="fas fa-trash-alt"></i> Delete pending</span>
+            {% endif %}
+            {% if flag_issue_pending %}
+            <span class="pending-pill pending-pill--flag"><i class="fas fa-flag"></i> Flag pending</span>
+            {% endif %}
+            {% if deputy_removal_pending %}
+            <span class="pending-pill pending-pill--deputy"><i class="fas fa-user-shield"></i> Deputy change pending</span>
+            {% endif %}
+        </div>
+        {% endif %}
     </div>
 
     <!-- Member Information Card -->
@@ -181,6 +194,16 @@
                     <div class="detail-value">
                         {% if member.deputy_leader %}
                             <span class="badge-deputy-leader"><i class="fas fa-user-shield"></i> Deputy Leader</span>
+                            {% if not user.is_deputy %}
+                                {% if deputy_removal_pending %}
+                                <p class="deputy-removal-note-mobile">Change request sent — awaiting portal approval.</p>
+                                {% else %}
+                                <button type="button" class="btn-request-deputy-change" onclick="requestDeputyRemovalDetail('{{ member.id }}', this)">
+                                    <i class="fas fa-user-shield"></i> Request change of deputy
+                                </button>
+                                <p class="deputy-removal-note-mobile">Portal must approve before you can assign a new deputy.</p>
+                                {% endif %}
+                            {% endif %}
                         {% else %}
                             <span style="color: #8b949e;">Not assigned</span>
                         {% endif %}
@@ -218,9 +241,15 @@
         <a href="{{ url_for('main.member_form', edit=member.id) }}" class="btn btn-edit" id="editBtn-mobile">
             <i class="fas fa-edit"></i>Edit Member
         </a>
+        {% if flag_issue_pending %}
+        <button type="button" class="btn btn-flag" disabled style="opacity: 0.85;" title="A flag is already awaiting review">
+            <i class="fas fa-flag"></i>Flag Pending
+        </button>
+        {% else %}
         <button onclick="openFlagModal()" class="btn btn-flag">
             <i class="fas fa-flag"></i>Flag Member
         </button>
+        {% endif %}
         {% if delete_request_pending %}
         <button class="btn btn-delete" disabled>
             <i class="fas fa-trash"></i>Delete Request Pending
@@ -274,13 +303,13 @@
 <span class="nav-link nav-link-disabled"><i class="fas fa-users"></i><span>Members</span></span>
 <span class="nav-link nav-link-disabled"><i class="fas fa-user"></i><span>Profile</span></span>
 <a href="{{ url_for('main.meeting_dates') }}" class="nav-link"><i class="fas fa-user-check"></i><span>Attendance</span></a>
-<a href="{{ url_for('auth.logout') }}" class="nav-link"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
+<a href="{{ url_for('main.leaderboard') }}" class="nav-link"><i class="fas fa-medal"></i><span>Leaderboard</span></a>
 {% else %}
 <a href="{{ url_for('main.index') }}" class="nav-link"><i class="fas fa-home"></i><span>Home</span></a>
 <a href="{{ url_for('main.members') }}" class="nav-link active"><i class="fas fa-users"></i><span>Members</span></a>
 <a href="{{ url_for('main.profile') }}" class="nav-link"><i class="fas fa-user"></i><span>Profile</span></a>
 <a href="{{ url_for('main.meeting_dates') }}" class="nav-link"><i class="fas fa-user-check"></i><span>Attendance</span></a>
-<a href="{{ url_for('auth.logout') }}" class="nav-link"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
+<a href="{{ url_for('main.leaderboard') }}" class="nav-link"><i class="fas fa-medal"></i><span>Leaderboard</span></a>
 {% endif %}
 {% endblock %}
 
@@ -348,6 +377,70 @@
     margin: 0;
     position: relative;
     z-index: 1;
+}
+
+.member-pending-banner {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.45rem;
+    margin-top: 0.85rem;
+    padding: 0 0.5rem;
+    position: relative;
+    z-index: 1;
+}
+
+.pending-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.3rem 0.65rem;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.pending-pill--delete {
+    background: rgba(245, 158, 11, 0.25);
+    color: #fcd34d;
+}
+
+.pending-pill--flag {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+}
+
+.pending-pill--deputy {
+    background: rgba(59, 130, 246, 0.22);
+    color: #93c5fd;
+}
+
+.deputy-removal-note-mobile {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    margin: 0.5rem 0 0 0;
+    line-height: 1.35;
+}
+
+.btn-request-deputy-change {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-top: 0.5rem;
+    padding: 0.45rem 0.75rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border-radius: 10px;
+    border: 1px solid rgba(88, 166, 255, 0.5);
+    background: rgba(88, 166, 255, 0.15);
+    color: #58a6ff;
+    cursor: pointer;
+}
+
+.btn-request-deputy-change:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }
 
 /* Member Info Card */
@@ -845,6 +938,31 @@ function saveChanges(platform) {
     window.location.href = '{{ url_for("main.member_form", edit=member.id) }}';
 }
 
+function requestDeputyRemovalDetail(memberId, btn) {
+    if (btn && btn.disabled) return;
+    if (!confirm('Send a request to the cell portal to remove this deputy? After approval you can assign a new deputy.')) return;
+    if (btn) btn.disabled = true;
+    var url = '{{ url_for("main.request_deputy_removal", member_id="__ID__") }}'.replace('__ID__', memberId);
+    fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        body: '{}'
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.success) {
+            window.location.reload();
+        } else {
+            alert(data.message || 'Request failed');
+            if (btn) btn.disabled = false;
+        }
+    })
+    .catch(function() {
+        alert('Request failed. Please try again.');
+        if (btn) btn.disabled = false;
+    });
+}
+
 function confirmDelete() {
     if (confirm('Are you sure you want to request deletion of {{ member.name|tojson }}? This will send a request to the cell portal for review.')) {
         // Create a form to submit the delete request
@@ -955,3 +1073,4 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 {% endblock %}
+

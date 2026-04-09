@@ -5,7 +5,6 @@ import bcrypt
 import re
 from dotenv import load_dotenv
 from utils.activity_logger import log_activity
-from utils.device_detector import get_template_suffix
 
 # Load environment variables
 load_dotenv()
@@ -67,8 +66,7 @@ def login():
         
         if not mobile or not password:
             flash("Mobile number and password are required", 'error')
-            template_name = f'auth/login{get_template_suffix()}.html'
-            return render_template(template_name)
+            return render_template('auth/login.html')
         
         local10, candidates = sl_local_mobile10_candidates(mobile)
         if not local10 or not candidates:
@@ -76,8 +74,7 @@ def login():
                 "Please enter a valid Sri Lanka mobile number (example: 071..., +947...)",
                 'error'
             )
-            template_name = f'auth/login{get_template_suffix()}.html'
-            return render_template(template_name)
+            return render_template('auth/login.html')
         
         try:
             # 1) Try leader login (users table)
@@ -171,8 +168,7 @@ def login():
             print(f"Error during login: {e}")
             flash("An error occurred during login. Please try again.", 'error')
     
-    template_name = f'auth/login{get_template_suffix()}.html'
-    return render_template(template_name)
+    return render_template('auth/login.html')
 
 @auth_bp.route('/logout')
 def logout():

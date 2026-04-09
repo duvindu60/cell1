@@ -1,17 +1,19 @@
 from flask import Blueprint, render_template, session, redirect, url_for, flash, request, jsonify
 from supabase import create_client, Client
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone, date
 import os
 import hashlib
 import re
+import traceback
 from dotenv import load_dotenv
 from utils.activity_logger import log_activity
 from utils.device_detector import get_template_suffix
+from utils.leaderboard_snapshot_query import query_with_fallback_filters, SNAPSHOT_TABLE_CANDIDATES
 # Load environment variables
 load_dotenv()
 # Supabase configuration
 SUPABASE_URL = os.getenv('SUPABASE_URL')
-SUPABASE_KEY = os.getenv('SUPABASE_ANON_KEY')
+SUPABASE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY') or os.getenv('SUPABASE_ANON_KEY')
 if SUPABASE_URL and SUPABASE_KEY:
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 else:
@@ -45,6 +47,216 @@ def get_user_created_date(user_id):
     except Exception as e:
         print(f"Error fetching user created_at: {e}")
     return None
+
+
+def _tutorial_resource_url(tutorial):
+    """First non-empty URL on a tutorial row (legacy helpers / dashboards)."""
+    if not tutorial or not isinstance(tutorial, dict):
+        return ''
+    raw = (
+        tutorial.get('pdf_url_1')
+        or tutorial.get('pdf_url_2')
+        or tutorial.get('pdf_url_3')
+        or tutorial.get('video_url_1')
+        or tutorial.get('video_url_2')
+        or tutorial.get('video_url_3')
+        or tutorial.get('file_url')
+        or tutorial.get('pdf_url')
+        or tutorial.get('url')
+        or tutorial.get('link')
+        or tutorial.get('document_url')
+        or tutorial.get('video_url')
+        or tutorial.get('attachment_url')
+        or tutorial.get('file_path')
+    )
+    if raw is None:
+        return ''
+    return str(raw).strip()
+
+
+def load_tutorials_for_meeting_day(meeting_date_formatted, parsed_date):
+    """Rows for that meeting day. Uses exact match first, then a day range for timestamptz/text values."""
+    if not supabase:
+        return []
+    result = (
+        supabase.table('tutorials')
+        .select('*')
+        .eq('meeting_date', meeting_date_formatted)
+        .execute()
+    )
+    rows = result.data or []
+    if rows or not parsed_date:
+        return rows
+    day_start = parsed_date.isoformat()
+    day_end = (parsed_date + timedelta(days=1)).isoformat()
+    result2 = (
+        supabase.table('tutorials')
+        .select('*')
+        .gte('meeting_date', day_start)
+        .lt('meeting_date', day_end)
+        .execute()
+    )
+    return result2.data or []
+
+
+def _str_url(val):
+    if val is None:
+        return ''
+    return str(val).strip()
+
+
+def _classify_tutorial_media(url):
+    """Return 'video', 'pdf', or 'other' for grouping on the meeting tutorials page."""
+    if not url:
+        return 'other'
+    u = url.lower()
+    video_markers = (
+        'youtube.com',
+        'youtu.be',
+        'vimeo.com',
+        'facebook.com/watch',
+        'tiktok.com',
+        'loom.com',
+        'wistia.com',
+        '.mp4',
+        '.webm',
+        '.m3u8',
+        'stream.',
+    )
+    if any(m in u for m in video_markers):
+        return 'video'
+    if u.endswith('.pdf') or '.pdf?' in u or '/.pdf' in u:
+        return 'pdf'
+    return 'other'
+
+
+def _tutorial_display_entry(row, url, title, description_fallback=None):
+    """One card on the meeting tutorials page (template expects file_url + title fields)."""
+    desc = row.get('description')
+    if (not desc or not str(desc).strip()) and description_fallback:
+        desc = description_fallback
+    return {
+        'file_url': url,
+        'tutorial_name': title,
+        'title': title,
+        'meeting_date': row.get('meeting_date'),
+        'description': desc,
+        'uploaded_at': row.get('uploaded_at'),
+    }
+
+
+def build_tutorial_sections(rows):
+    """Expand each DB row into multiple cards: pdf_url_1..3, video_url_1..3, then legacy URL fields.
+
+    Numbered slots always become separate cards if the cell is non-empty, even when the same URL
+    is repeated in pdf_url_2 / video_url_3 etc. Legacy fields still skip URLs already used in any
+    numbered slot (unique set) so file_url does not duplicate a numbered link.
+    """
+    pdfs, videos, other = [], [], []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        base = row.get('tutorial_name') or row.get('title') or 'Tutorial'
+        seen_any_numbered = set()
+
+        for i in (1, 2, 3):
+            u = _str_url(row.get(f'pdf_url_{i}'))
+            if not u:
+                continue
+            seen_any_numbered.add(u)
+            pdfs.append(
+                _tutorial_display_entry(
+                    row, u, f'PDF {i}', description_fallback=base if base != 'Tutorial' else None
+                )
+            )
+
+        for i in (1, 2, 3):
+            u = _str_url(row.get(f'video_url_{i}'))
+            if not u:
+                continue
+            seen_any_numbered.add(u)
+            videos.append(
+                _tutorial_display_entry(
+                    row, u, f'Video {i}', description_fallback=base if base != 'Tutorial' else None
+                )
+            )
+
+        # Unique URLs from numbered columns only — avoids duplicating those links via legacy keys.
+        # (Cards above already list every non-empty slot, including duplicate URLs across slots.)
+        legacy_keys = (
+            'file_url',
+            'pdf_url',
+            'video_url',
+            'url',
+            'link',
+            'document_url',
+            'attachment_url',
+            'file_path',
+        )
+        for key in legacy_keys:
+            u = _str_url(row.get(key))
+            if not u or u in seen_any_numbered:
+                continue
+            seen_any_numbered.add(u)
+            kind = _classify_tutorial_media(u)
+            stub = _tutorial_display_entry(row, u, base)
+            if kind == 'video':
+                videos.append(stub)
+            elif kind == 'pdf':
+                pdfs.append(stub)
+            else:
+                other.append(stub)
+
+    sections = []
+    if pdfs:
+        sections.append({'kind': 'pdf', 'title': 'PDF documents', 'entries': pdfs})
+    if videos:
+        sections.append({'kind': 'video', 'title': 'Video tutorials', 'entries': videos})
+    if other:
+        sections.append({'kind': 'other', 'title': 'Other resources', 'entries': other})
+    return sections
+
+
+def _parse_meeting_date_value(meeting_date):
+    """Parse meetings.tutorials-style meeting_date to a date; return None if invalid."""
+    if meeting_date is None:
+        return None
+    try:
+        if isinstance(meeting_date, datetime):
+            return meeting_date.date()
+        if isinstance(meeting_date, date):
+            return meeting_date
+        if isinstance(meeting_date, str):
+            try:
+                return datetime.strptime(meeting_date, "%Y-%m-%d").date()
+            except ValueError:
+                try:
+                    return datetime.strptime(meeting_date, "%Y-%m-%dT%H:%M:%S").date()
+                except ValueError:
+                    return datetime.strptime(meeting_date.split('T')[0], "%Y-%m-%d").date()
+    except Exception:
+        return None
+    return None
+
+
+def _parse_created_at_to_date(val):
+    """cell_members.created_at -> date for comparison with meeting_date."""
+    if val is None:
+        return None
+    try:
+        if isinstance(val, str):
+            try:
+                return datetime.fromisoformat(val.replace('Z', '+00:00')).date()
+            except ValueError:
+                return datetime.strptime(val.split('T')[0], "%Y-%m-%d").date()
+        if isinstance(val, datetime):
+            return val.date()
+        if isinstance(val, date):
+            return val
+    except Exception:
+        return None
+    return None
+
 
 # Helper function to convert user ID to UUID format
 def get_uuid_from_user_id(user_id):
@@ -92,6 +304,166 @@ def redirect_deputy_to_attendance():
     if session.get('user', {}).get('is_deputy'):
         return redirect(url_for('main.meeting_dates'))
     return None
+
+
+def pending_flagged_by_member_id(supabase_client, leader_id, member_ids):
+    """
+    Map member_id -> pending delete_request, deputy_removal_request, and/or other flags.
+    issue_type deputy_removal_request targets the current deputy's cell_members.id.
+    """
+    ids = [str(x) for x in member_ids if x is not None]
+    mapping = {
+        mid: {
+            'delete_request_pending': False,
+            'flag_issue_pending': False,
+            'deputy_removal_pending': False,
+        }
+        for mid in ids
+    }
+    if not supabase_client or not leader_id or not ids:
+        return mapping
+    try:
+        res = (
+            supabase_client.table('flagged_issues')
+            .select('member_id,issue_type')
+            .eq('leader_id', str(leader_id))
+            .eq('status', 'pending')
+            .in_('member_id', ids)
+            .execute()
+        )
+        for row in res.data or []:
+            mid = str(row.get('member_id') or '')
+            if mid not in mapping:
+                continue
+            it = (row.get('issue_type') or '').strip()
+            if it == 'delete_request':
+                mapping[mid]['delete_request_pending'] = True
+            elif it == 'deputy_removal_request':
+                mapping[mid]['deputy_removal_pending'] = True
+            else:
+                mapping[mid]['flag_issue_pending'] = True
+    except Exception as e:
+        print(f"Error loading pending flagged_issues for leader {leader_id}: {e}")
+    return mapping
+
+
+def pending_flagged_state_for_member(supabase_client, leader_id, member_id):
+    """Single-member pending delete, deputy removal request, and flag state from flagged_issues."""
+    delete_request_pending = False
+    flag_issue_pending = False
+    deputy_removal_pending = False
+    if not supabase_client or not leader_id or not member_id:
+        return delete_request_pending, flag_issue_pending, deputy_removal_pending
+    try:
+        res = (
+            supabase_client.table('flagged_issues')
+            .select('issue_type')
+            .eq('member_id', str(member_id))
+            .eq('leader_id', str(leader_id))
+            .eq('status', 'pending')
+            .execute()
+        )
+        for row in res.data or []:
+            it = (row.get('issue_type') or '').strip()
+            if it == 'delete_request':
+                delete_request_pending = True
+            elif it == 'deputy_removal_request':
+                deputy_removal_pending = True
+            else:
+                flag_issue_pending = True
+    except Exception as e:
+        print(f"Error checking pending flagged_issues for member {member_id}: {e}")
+    return delete_request_pending, flag_issue_pending, deputy_removal_pending
+
+
+def leader_has_pending_deputy_removal_request(supabase_client, leader_id):
+    """True if this leader already has a pending deputy_removal_request (any member row)."""
+    if not supabase_client or not leader_id:
+        return False
+    try:
+        r = (
+            supabase_client.table('flagged_issues')
+            .select('id')
+            .eq('leader_id', str(leader_id))
+            .eq('issue_type', 'deputy_removal_request')
+            .eq('status', 'pending')
+            .limit(1)
+            .execute()
+        )
+        return bool(r.data)
+    except Exception as e:
+        print(f"Error checking pending deputy removal for leader {leader_id}: {e}")
+        return False
+
+
+def _row_score(row):
+    if not row:
+        return 0
+    return row.get('total_score') or row.get('score') or row.get('exp') or 0
+
+
+def _row_user_key(row):
+    if not row:
+        return None
+    return row.get('leader_user_id') or row.get('user_id') or row.get('leader_id')
+
+
+def get_dashboard_leaderboard_stats(leader_id):
+    """
+    Current calendar month (UTC) snapshot for the welcome-card pill.
+    Uses the same Supabase fallbacks as /api/leaderboard; computes rank from
+    ordered rows when the snapshot has no rank column.
+    """
+    default = {'rank': None, 'total_score': 0, 'position': '-'}
+    if not supabase or not leader_id:
+        return default
+    try:
+        period_key = datetime.now(timezone.utc).strftime('%Y-%m')
+        rows_user, _ = query_with_fallback_filters(
+            supabase,
+            SNAPSHOT_TABLE_CANDIDATES,
+            select='*',
+            period_key=period_key,
+            user_id=leader_id,
+            limit=1,
+            score_order=False,
+        )
+        lb_row = rows_user[0] if rows_user else None
+        score_val = _row_score(lb_row)
+        rank_val = None
+        if lb_row:
+            rank_val = lb_row.get('rank') if lb_row.get('rank') is not None else lb_row.get('leaderboard_rank')
+
+        need_period_list = lb_row is None or rank_val is None
+        if need_period_list:
+            ranked_rows, _ = query_with_fallback_filters(
+                supabase,
+                SNAPSHOT_TABLE_CANDIDATES,
+                select='*',
+                period_key=period_key,
+                user_id=None,
+                limit=200,
+                score_order=True,
+            )
+            for idx, row in enumerate(ranked_rows or [], start=1):
+                rid = _row_user_key(row)
+                if rid is not None and str(rid) == str(leader_id):
+                    if rank_val is None:
+                        rank_val = idx
+                    if lb_row is None:
+                        score_val = _row_score(row)
+                    break
+
+        position = f'#{rank_val}' if rank_val is not None else '-'
+        return {
+            'rank': rank_val,
+            'total_score': score_val,
+            'position': position,
+        }
+    except Exception as e:
+        print(f"Error loading leaderboard stats: {e}")
+        return default
+
 
 def get_tutorial_meeting_date_corrected():
     """Get the meeting date for tutorials - CORRECTED LOGIC:
@@ -170,6 +542,30 @@ def get_attendance_deadline(meeting_date):
     # Set deadline to Wednesday 11:59 PM
     deadline = datetime.combine(meeting_wednesday, datetime.max.time().replace(hour=23, minute=59, second=59))
     return deadline
+
+
+def get_attendance_marking_countdown_payload(meeting_date):
+    """
+    ISO timestamps for dashboard countdown: marking opens at start of meeting day (Tue 00:00),
+    closes Wednesday 23:59:59 local (same as get_attendance_deadline).
+    If that window has already ended (Thu–Mon), rolls forward to the next Tuesday's window
+    so the UI always shows an upcoming open/close pair.
+    """
+    if meeting_date is None:
+        return None
+    now = datetime.now()
+    tuesday = meeting_date
+    for _ in range(520):
+        opens_at = datetime.combine(tuesday, datetime.min.time())
+        closes_at = get_attendance_deadline(tuesday)
+        if now <= closes_at:
+            return {
+                'opens_iso': opens_at.replace(microsecond=0).isoformat(),
+                'closes_iso': closes_at.replace(microsecond=0).isoformat(),
+            }
+        tuesday = tuesday + timedelta(days=7)
+    return None
+
 
 def can_mark_attendance(meeting_date):
     """
@@ -266,49 +662,52 @@ def index():
     if 'user' in session:
         # Get leader ID - use user ID directly
         leader_id = get_effective_leader_id()
-        
+        leaderboard_stats = get_dashboard_leaderboard_stats(leader_id)
+
+        next_meeting_date = get_tutorial_meeting_date_corrected()
+        current_attendance_date = get_attendance_meeting_date_corrected()
+        meetings_for_dashboard = []
+        user_created_date_dashboard = None
         try:
-            # Initialize default values
+            user_created_date_dashboard = get_user_created_date(leader_id)
+            mq = supabase.table('meetings').select('*')
+            if user_created_date_dashboard:
+                mq = mq.gte('meeting_date', user_created_date_dashboard.isoformat())
+            meetings_for_dashboard = (
+                mq.order('meeting_date', desc=True).limit(4).execute()
+            ).data or []
+        except Exception:
+            meetings_for_dashboard = []
+
+        try:
             member_count = 0
-            next_meeting_date = get_tutorial_meeting_date_corrected()
-            current_attendance_date = get_attendance_meeting_date_corrected()
             members_result = supabase.table('cell_members').select('id').eq('leader_id', leader_id).execute()
             member_count = len(members_result.data) if members_result.data else 0
-            # Use next meeting date for tutorial card
             next_meeting_formatted = next_meeting_date.strftime('%B %d, %Y')
-            
-            # Check if there are any tutorials for the next meeting
+
+            tutorials_result_data = []
+            has_tutorials = False
             try:
-                # First, let's see what columns exist in the tutorials table
-                print(f"Checking tutorials table structure...")
-                test_query = supabase.table('tutorials').select('*').limit(1).execute()
-                print(f"Tutorials table sample data: {test_query.data}")
-                
-                # Try querying without leader_id filter first
-                tutorials_result = supabase.table('tutorials')\
-                    .select('*')\
-                    .eq('meeting_date', next_meeting_date.isoformat())\
+                tutorials_result = (
+                    supabase.table('tutorials')
+                    .select('*')
+                    .eq('meeting_date', next_meeting_date.isoformat())
                     .execute()
-                
-                has_tutorials = len(tutorials_result.data) > 0 if tutorials_result.data else False
-                print(f"Next meeting date: {next_meeting_date.isoformat()}")
-                print(f"Tutorials found for next meeting: {has_tutorials}")
-                print(f"Tutorials data: {tutorials_result.data}")
-                
-                # For now, skip placeholder creation until we fix the column issue
-                # We'll just show the status based on existing tutorials
-                
+                )
+                tutorials_result_data = tutorials_result.data or []
+                has_tutorials = len(tutorials_result_data) > 0
             except Exception as e:
                 print(f"Error checking tutorials: {e}")
                 has_tutorials = False
-            
-            # Check if the tutorial is a placeholder (by checking tutorial name)
+
             is_placeholder = False
-            if has_tutorials and tutorials_result.data:
-                tutorial_record = tutorials_result.data[0]
-                is_placeholder = tutorial_record.get('tutorial_name') == 'No Tutorial Uploaded'
-            
-            # Update tutorial card data with status
+            if has_tutorials and tutorials_result_data:
+                tutorial_record = tutorials_result_data[0]
+                is_placeholder = (
+                    tutorial_record.get('tutorial_name') == 'No Tutorial Uploaded'
+                    or tutorial_record.get('title') == 'No Tutorial Uploaded'
+                )
+
             tutorial_status = 'updated' if has_tutorials and not is_placeholder else 'not_updated'
             tutorial_card_data.update({
                 'upcoming_date': next_meeting_formatted,
@@ -317,116 +716,98 @@ def index():
                 'meeting_date_iso': next_meeting_date.isoformat(),
                 'status': tutorial_status
             })
-            
-            # Get tutorial list for Quick Access - only from meetings table
+
             tutorial_list = []
             try:
-                # Get user's created date to filter meetings
-                user_created_date = get_user_created_date(leader_id)
-                
-                # Get meetings from meetings table, filtered by user's creation date
-                query = supabase.table('meetings').select('*')
-                if user_created_date:
-                    query = query.gte('meeting_date', user_created_date.isoformat())
-                meetings_result = query\
-                    .order('meeting_date', desc=True)\
-                    .limit(4)\
-                    .execute()
-                
-                if meetings_result.data:
-                    today = datetime.now().date()
-                    
-                    for meeting in meetings_result.data:
-                        meeting_date = meeting.get('meeting_date')
-                        if not meeting_date:
-                            continue
-                        
-                        try:
-                            # Parse meeting date
-                            if isinstance(meeting_date, str):
-                                try:
-                                    parsed_date = datetime.strptime(meeting_date, "%Y-%m-%d").date()
-                                except ValueError:
-                                    try:
-                                        parsed_date = datetime.strptime(meeting_date, "%Y-%m-%dT%H:%M:%S").date()
-                                    except ValueError:
-                                        parsed_date = datetime.strptime(meeting_date.split('T')[0], "%Y-%m-%d").date()
-                            else:
-                                parsed_date = meeting_date
-                            
-                            # Additional safety check: skip meetings before user creation
-                            if user_created_date and parsed_date < user_created_date:
-                                continue
-                            
-                            meeting_date_iso = parsed_date.isoformat()
-                            
-                            # Check for tutorial for this meeting date
-                            tutorial_result = supabase.table('tutorials')\
-                                .select('*')\
-                                .eq('meeting_date', meeting_date_iso)\
-                                .execute()
-                            
-                            has_tutorial = len(tutorial_result.data) > 0 if tutorial_result.data else False
-                            is_placeholder_tutorial = False
-                            tutorial_record = None
-                            
-                            if has_tutorial and tutorial_result.data:
-                                tutorial_record = tutorial_result.data[0]
-                                # Check if it's a placeholder (check title field)
-                                is_placeholder_tutorial = tutorial_record.get('title') == 'No Tutorial Uploaded' or tutorial_record.get('title') == ''
-                            
-                            # Determine if this is upcoming or past
-                            is_upcoming = parsed_date > today
-                            
-                            tutorial_list.append({
-                                'date': parsed_date.strftime("%B %d, %Y"),
-                                'date_iso': meeting_date_iso,
-                                'has_tutorial': has_tutorial,
-                                'is_placeholder': is_placeholder_tutorial,
-                                'is_upcoming': is_upcoming,
-                                'status': 'updated' if has_tutorial and not is_placeholder_tutorial else 'not_updated',
-                                'tutorial_name': tutorial_record.get('title', 'No Tutorial') if has_tutorial else None,
-                                'description': tutorial_record.get('description', '') if has_tutorial else None,
-                                'sort_date': parsed_date
-                            })
-                        except Exception as date_error:
-                            print(f"Error parsing meeting date {meeting_date}: {date_error}")
-                            continue
-                    
-                    # Sort tutorials: upcoming first, then past tutorials (most recent first)
-                    tutorial_list.sort(key=lambda x: (not x['is_upcoming'], -x['sort_date'].toordinal()))
+                today = datetime.now().date()
+                parsed_slots = []
+                for meeting in meetings_for_dashboard:
+                    meeting_date = meeting.get('meeting_date')
+                    parsed_date = _parse_meeting_date_value(meeting_date)
+                    if not parsed_date:
+                        continue
+                    if user_created_date_dashboard and parsed_date < user_created_date_dashboard:
+                        continue
+                    parsed_slots.append({
+                        'parsed_date': parsed_date,
+                        'meeting_date_iso': parsed_date.isoformat(),
+                    })
+                date_isos = list({s['meeting_date_iso'] for s in parsed_slots})
+                tutorials_by_iso = {}
+                if date_isos:
+                    try:
+                        batch_tr = (
+                            supabase.table('tutorials').select('*').in_('meeting_date', date_isos).execute()
+                        )
+                        for row in (batch_tr.data or []):
+                            nk = _parse_meeting_date_value(row.get('meeting_date'))
+                            if nk:
+                                tutorials_by_iso.setdefault(nk.isoformat(), []).append(row)
+                    except Exception:
+                        pass
+                for slot in parsed_slots:
+                    parsed_date = slot['parsed_date']
+                    meeting_date_iso = slot['meeting_date_iso']
+                    rows_for_day = tutorials_by_iso.get(meeting_date_iso, [])
+                    if not rows_for_day:
+                        for alt_k, alt_rows in tutorials_by_iso.items():
+                            if alt_k.startswith(meeting_date_iso) or meeting_date_iso.startswith(alt_k[:10]):
+                                rows_for_day = alt_rows
+                                break
+                    has_tutorial = len(rows_for_day) > 0
+                    tutorial_record = rows_for_day[0] if has_tutorial else None
+                    is_placeholder_tutorial = False
+                    if has_tutorial and tutorial_record:
+                        is_placeholder_tutorial = (
+                            tutorial_record.get('title') == 'No Tutorial Uploaded'
+                            or tutorial_record.get('title') == ''
+                        )
+                    is_upcoming = parsed_date > today
+                    tutorial_list.append({
+                        'date': parsed_date.strftime("%B %d, %Y"),
+                        'date_iso': meeting_date_iso,
+                        'has_tutorial': has_tutorial,
+                        'is_placeholder': is_placeholder_tutorial,
+                        'is_upcoming': is_upcoming,
+                        'status': 'updated' if has_tutorial and not is_placeholder_tutorial else 'not_updated',
+                        'tutorial_name': tutorial_record.get('title', 'No Tutorial') if has_tutorial else None,
+                        'description': tutorial_record.get('description', '') if has_tutorial else None,
+                        'sort_date': parsed_date
+                    })
+                tutorial_list.sort(key=lambda x: (not x['is_upcoming'], -x['sort_date'].toordinal()))
             except Exception as e:
                 print(f"Error fetching tutorial list: {e}")
                 tutorial_list = []
         except Exception as e:
             print(f"Error fetching dashboard data: {e}")
             member_count = 0
-            latest_tutorial = None
             next_meeting_date = get_tutorial_meeting_date_corrected()
+            current_attendance_date = get_attendance_meeting_date_corrected()
             tutorial_list = []
             attendance_list = []
             latest_attendance = None
+            leaderboard_stats = get_dashboard_leaderboard_stats(leader_id) if leader_id else {
+                'rank': None,
+                'total_score': 0,
+                'position': '-'
+            }
         past_tuesdays = get_past_tuesdays()
         today = datetime.now()
         
         # Get attendance status for current week (using attendance-specific date logic)
         attendance_status = 'incomplete'
         latest_attendance = None
-        
+        attendance_list = []
+
         try:
-            # Get current week's Tuesday date using corrected attendance logic
-            current_attendance_date = get_attendance_meeting_date_corrected()
             current_tuesday_str = current_attendance_date.strftime("%B %d, %Y")
-            
-            # Get members for this leader, filtered by created_at <= current_attendance_date
-            # Only count members who existed on or before this meeting date
+
             query = supabase.table('cell_members').select('id').eq('leader_id', leader_id)
             query = query.lte('created_at', current_attendance_date.isoformat())
             members_result = query.execute()
             total_members = len(members_result.data) if members_result.data else 0
-            
+
             if total_members > 0:
-                # Get attendance records for current week
                 member_ids = [member['id'] for member in members_result.data]
                 attendance_result = supabase.table('attendance')\
                     .select('member_id')\
@@ -434,121 +815,87 @@ def index():
                     .eq('meeting_date', current_attendance_date.isoformat())\
                     .in_('member_id', member_ids)\
                     .execute()
-                
-                # Count how many members have attendance records
+
                 attendance_count = len(attendance_result.data) if attendance_result.data else 0
-                
-                # Debug logging
-                print(f"Current Attendance Date: {current_attendance_date.isoformat()}")
-                print(f"Total members (created <= meeting date): {total_members}")
-                print(f"Attendance records found: {attendance_count}")
-                print(f"Attendance data: {attendance_result.data}")
-                
-                # Determine status based on completion
+
                 if attendance_count == total_members:
                     attendance_status = 'complete'
                 elif attendance_count > 0:
                     attendance_status = 'partial'
                 else:
                     attendance_status = 'incomplete'
-                
-                print(f"Calculated attendance status: {attendance_status}")
             else:
-                # No members found, set default status
                 attendance_status = 'incomplete'
-                print("No members found for this leader")
-            
-            # Set latest attendance data for display using current attendance date
+
             latest_attendance = {
                 'meeting_date': current_tuesday_str,
                 'meeting_date_iso': current_attendance_date.isoformat(),
                 'status': attendance_status
             }
-            
-            # Get attendance reminder info for current week
-            attendance_reminder = None
-            if current_attendance_date:
-                attendance_reminder = get_attendance_reminder_info(current_attendance_date)
-            
-            # Get attendance list for Quick Access - only from meetings table
+
             attendance_list = []
             try:
-                # Get user's created date to filter meetings
-                user_created_date = get_user_created_date(leader_id)
-                
-                # Get meetings from meetings table, filtered by user's creation date
-                query = supabase.table('meetings').select('*')
-                if user_created_date:
-                    query = query.gte('meeting_date', user_created_date.isoformat())
-                meetings_result = query\
-                    .order('meeting_date', desc=True)\
-                    .limit(4)\
-                    .execute()
-                
-                if meetings_result.data:
-                    for meeting in meetings_result.data:
-                        meeting_date = meeting.get('meeting_date')
-                        if not meeting_date:
+                cm_full = supabase.table('cell_members').select('id,created_at').eq('leader_id', leader_id).execute()
+                cm_rows = cm_full.data or []
+                parsed_meetings = []
+                for meeting in meetings_for_dashboard:
+                    meeting_date_raw = meeting.get('meeting_date')
+                    parsed_date = _parse_meeting_date_value(meeting_date_raw)
+                    if not parsed_date:
+                        continue
+                    if user_created_date_dashboard and parsed_date < user_created_date_dashboard:
+                        continue
+                    parsed_meetings.append({
+                        'parsed_date': parsed_date,
+                        'meeting_date_iso': parsed_date.isoformat(),
+                        'date_str': parsed_date.strftime("%B %d, %Y"),
+                    })
+                isos_att = [p['meeting_date_iso'] for p in parsed_meetings]
+                att_by_meeting = {}
+                if isos_att:
+                    try:
+                        att_batch = supabase.table('attendance')\
+                            .select('member_id,meeting_date')\
+                            .eq('leader_id', leader_id)\
+                            .in_('meeting_date', isos_att)\
+                            .execute()
+                        for row in (att_batch.data or []):
+                            nk = _parse_meeting_date_value(row.get('meeting_date'))
+                            if nk:
+                                att_by_meeting.setdefault(nk.isoformat(), set()).add(row['member_id'])
+                    except Exception:
+                        pass
+                for p in parsed_meetings:
+                    meeting_date_iso = p['meeting_date_iso']
+                    parsed_date = p['parsed_date']
+                    valid_ids = set()
+                    for m in cm_rows:
+                        mid = m.get('id')
+                        if not mid:
                             continue
-                        
-                        try:
-                            # Parse meeting date
-                            if isinstance(meeting_date, str):
-                                try:
-                                    parsed_date = datetime.strptime(meeting_date, "%Y-%m-%d").date()
-                                except ValueError:
-                                    try:
-                                        parsed_date = datetime.strptime(meeting_date, "%Y-%m-%dT%H:%M:%S").date()
-                                    except ValueError:
-                                        parsed_date = datetime.strptime(meeting_date.split('T')[0], "%Y-%m-%d").date()
-                            else:
-                                parsed_date = meeting_date
-                            
-                            # Additional safety check: skip meetings before user creation
-                            if user_created_date and parsed_date < user_created_date:
-                                continue
-                            
-                            meeting_date_str = parsed_date.strftime("%B %d, %Y")
-                            meeting_date_iso = parsed_date.isoformat()
-                            
-                            # Get members for this meeting date (only those created on or before this meeting)
-                            meeting_members_query = supabase.table('cell_members').select('id').eq('leader_id', leader_id)
-                            meeting_members_query = meeting_members_query.lte('created_at', meeting_date_iso)
-                            meeting_members_result = meeting_members_query.execute()
-                            meeting_member_ids = [member['id'] for member in meeting_members_result.data] if meeting_members_result.data else []
-                            meeting_total_members = len(meeting_member_ids)
-                            
-                            # Get attendance records for this meeting date (only for members who existed then)
-                            if meeting_member_ids:
-                                week_attendance_result = supabase.table('attendance')\
-                                    .select('member_id')\
-                                    .eq('leader_id', leader_id)\
-                                    .eq('meeting_date', meeting_date_iso)\
-                                    .in_('member_id', meeting_member_ids)\
-                                    .execute()
-                                
-                                week_attendance_count = len(week_attendance_result.data) if week_attendance_result.data else 0
-                            else:
-                                week_attendance_count = 0
-                            
-                            # Determine status for this meeting
-                            if meeting_total_members > 0 and week_attendance_count == meeting_total_members:
-                                week_status = 'complete'
-                            elif week_attendance_count > 0:
-                                week_status = 'partial'
-                            else:
-                                week_status = 'incomplete'
-                            
-                            attendance_list.append({
-                                'date': meeting_date_str,
-                                'date_iso': meeting_date_iso,
-                                'status': week_status,
-                                'count': week_attendance_count,
-                                'total': meeting_total_members
-                            })
-                        except Exception as date_error:
-                            print(f"Error parsing meeting date {meeting_date}: {date_error}")
-                            continue
+                        c_d = _parse_created_at_to_date(m.get('created_at'))
+                        if c_d is None or c_d <= parsed_date:
+                            valid_ids.add(mid)
+                    meeting_total_members = len(valid_ids)
+                    raw_marks = set(att_by_meeting.get(meeting_date_iso, set()))
+                    if not raw_marks:
+                        for alt_k, alt_set in att_by_meeting.items():
+                            if alt_k.startswith(meeting_date_iso) or meeting_date_iso.startswith(alt_k[:10]):
+                                raw_marks |= alt_set
+                    week_attendance_count = len(raw_marks & valid_ids)
+                    if meeting_total_members > 0 and week_attendance_count == meeting_total_members:
+                        week_status = 'complete'
+                    elif week_attendance_count > 0:
+                        week_status = 'partial'
+                    else:
+                        week_status = 'incomplete'
+                    attendance_list.append({
+                        'date': p['date_str'],
+                        'date_iso': meeting_date_iso,
+                        'status': week_status,
+                        'count': week_attendance_count,
+                        'total': meeting_total_members
+                    })
             except Exception as e:
                 print(f"Error fetching attendance list: {e}")
                 attendance_list = []
@@ -564,8 +911,10 @@ def index():
         try:
             # Get attendance reminder info for dashboard
             attendance_reminder = None
+            attendance_countdown = None
             if current_attendance_date:
                 attendance_reminder = get_attendance_reminder_info(current_attendance_date)
+                attendance_countdown = get_attendance_marking_countdown_payload(current_attendance_date)
             
             template_name = f'main/dashboard{get_template_suffix()}.html'
             return render_template(template_name,
@@ -584,7 +933,9 @@ def index():
                                  week_3_date=past_tuesdays[2],
                                  week_4_date=past_tuesdays[3],
                                  latest_attendance=latest_attendance,
+                                 leaderboard_stats=leaderboard_stats,
                                  attendance_reminder=attendance_reminder,
+                                 attendance_countdown=attendance_countdown,
                                  today=today)
         except Exception as e:
             print(f"Error rendering dashboard template: {e}")
@@ -682,6 +1033,19 @@ def profile():
     
     template_name = f'main/profile{get_template_suffix()}.html'
     return render_template(template_name, user=user_data)
+
+
+@main_bp.route('/leaderboard')
+def leaderboard():
+    if 'user' not in session:
+        return redirect(url_for('auth.login'))
+    if session.get('user', {}).get('is_deputy'):
+        flash('Leaderboard is available for leaders only.', 'error')
+        return redirect(url_for('main.meeting_dates'))
+    template_name = f'main/leaderboard{get_template_suffix()}.html'
+    return render_template(template_name, user=session['user'])
+
+
 @main_bp.route('/meeting-dates')
 def meeting_dates():
     if 'user' not in session:
@@ -1391,6 +1755,13 @@ def members():
         # Get members for this specific leader
         result = supabase.table('cell_members').select('*').eq('leader_id', leader_id).execute()
         members = result.data if result.data else []
+        pending_map = pending_flagged_by_member_id(supabase, leader_id, [m.get('id') for m in members])
+        for m in members:
+            mid = str(m.get('id') or '')
+            st = pending_map.get(mid, {})
+            m['delete_request_pending'] = st.get('delete_request_pending', False)
+            m['flag_issue_pending'] = st.get('flag_issue_pending', False)
+            m['deputy_removal_pending'] = st.get('deputy_removal_pending', False)
         # One deputy per leader; only the leader (not deputy) can assign
         has_deputy = any(m.get('deputy_leader') for m in members)
         can_assign_deputy = not has_deputy and not session['user'].get('is_deputy')
@@ -1506,29 +1877,18 @@ def member_details(member_id):
             # Add zone_name to member data for template
             member['zone_name'] = zone_name
 
-            # Check if there is a pending delete request for this member
-            delete_request_pending = False
-            try:
-                delete_request_result = (
-                    supabase.table('flagged_issues')
-                    .select('id')
-                    .eq('member_id', member_id)
-                    .eq('leader_id', leader_id)
-                    .eq('issue_type', 'delete_request')
-                    .eq('status', 'pending')
-                    .limit(1)
-                    .execute()
-                )
-                delete_request_pending = bool(delete_request_result.data)
-            except Exception as e:
-                print(f"Error checking delete request status for member {member_id}: {e}")
-            
+            delete_request_pending, flag_issue_pending, deputy_removal_pending = (
+                pending_flagged_state_for_member(supabase, leader_id, member_id)
+            )
+
             template_name = f'main/member_details{get_template_suffix()}.html'
             return render_template(
                 template_name,
                 member=member,
                 user=session['user'],
                 delete_request_pending=delete_request_pending,
+                flag_issue_pending=flag_issue_pending,
+                deputy_removal_pending=deputy_removal_pending,
             )
         else:
             flash('Member not found', 'error')
@@ -1935,36 +2295,48 @@ def meeting_tutorials(meeting_date):
         
         # Convert meeting_date from URL format to database format
         from datetime import datetime
+        parsed_date = None
+        meeting_date_formatted = meeting_date
         try:
             # Parse the date string (e.g., "September 16, 2025")
             parsed_date = datetime.strptime(meeting_date, "%B %d, %Y").date()
-            meeting_date_formatted = parsed_date.isoformat()  # Convert to YYYY-MM-DD format
+            meeting_date_formatted = parsed_date.isoformat()
         except ValueError:
-            # If parsing fails, use the original string
-            meeting_date_formatted = meeting_date
-        
-        # Look for tutorial for this specific meeting date
+            # e.g. ISO "2026-04-08" from an old bookmark or manual URL
+            alt = _parse_meeting_date_value(meeting_date)
+            if alt:
+                parsed_date = alt
+                meeting_date_formatted = alt.isoformat()
+
         # Note: tutorials table doesn't have leader_id column, so we query by meeting_date only
-        tutorial_result = supabase.table('tutorials')\
-            .select('*')\
-            .eq('meeting_date', meeting_date_formatted)\
-            .execute()
-        
-        tutorials = tutorial_result.data if tutorial_result.data else []
-        
+        tutorials = load_tutorials_for_meeting_day(meeting_date_formatted, parsed_date)
+        tutorial_sections = build_tutorial_sections(tutorials)
+
         # Check if this is the next meeting date (use corrected tutorial logic)
         next_meeting_date = get_tutorial_meeting_date_corrected()
-        is_next_week = parsed_date == next_meeting_date
-        
-        template_name = f'main/meeting_tutorials{get_template_suffix()}.html'
-        return render_template(template_name, 
-                             user=session['user'],
-                             meeting_date=meeting_date,
-                             tutorials=tutorials,
-                             is_next_week=is_next_week,
-                             no_tutorial_uploaded=len(tutorials) == 0)
+        is_next_week = (
+            parsed_date is not None
+            and next_meeting_date is not None
+            and parsed_date == next_meeting_date
+        )
+
+        # Always use meeting_tutorials.html: it fills both mobile_content and desktop_content.
+        # meeting_tutorials_mobile.html only defined mobile_content, so at viewport >= 992px
+        # base.html hides mobile layout and the page looked empty on tablets / desktop with a mobile UA.
+        template_name = 'main/meeting_tutorials.html'
+        return render_template(
+            template_name,
+            user=session['user'],
+            meeting_date=meeting_date,
+            tutorials=tutorials,
+            tutorial_sections=tutorial_sections,
+            is_next_week=is_next_week,
+            is_latest=False,
+            no_tutorial_uploaded=len(tutorials) == 0,
+        )
                                  
     except Exception as e:
+        traceback.print_exc()
         print(f"Error fetching tutorials: {e}")
         flash('Error loading tutorials', 'error')
         return redirect(url_for('main.index'))
@@ -2327,6 +2699,11 @@ def flag_member(member_id):
         if not member_result.data:
             flash('Member not found or you do not have permission to flag this member', 'error')
             return redirect(url_for('main.member_details', member_id=member_id))
+
+        _, flag_pend, _ = pending_flagged_state_for_member(supabase, leader_id, member_id)
+        if flag_pend:
+            flash('A flag is already pending review for this member.', 'info')
+            return redirect(url_for('main.member_details', member_id=member_id))
         
         # Get form data
         issue_type = request.form.get('issue_type', '').strip()
@@ -2447,27 +2824,39 @@ def toggle_potential_leader(member_id):
 
 @main_bp.route('/set_deputy_leader/<member_id>', methods=['POST'])
 def set_deputy_leader(member_id):
-    """Assign a member as deputy leader. Only leaders can assign; one deputy per leader."""
+    """Assign a member as deputy leader when none is set. Replacing a deputy requires portal-approved removal first."""
     if 'user' not in session:
         return jsonify({'success': False, 'message': 'Not authenticated'}), 401
     if session['user'].get('is_deputy'):
         return jsonify({'success': False, 'message': 'Only the leader can assign a deputy.'}), 403
     try:
         leader_id = get_effective_leader_id()
+        if leader_has_pending_deputy_removal_request(supabase, leader_id):
+            return jsonify({
+                'success': False,
+                'message': 'A deputy change is already waiting for cell portal approval. Wait for it to finish before assigning.',
+            }), 400
+
         member_result = supabase.table('cell_members').select('id, name, deputy_leader').eq('id', member_id).eq('leader_id', leader_id).execute()
         if not member_result.data or len(member_result.data) == 0:
             return jsonify({'success': False, 'message': 'Member not found or access denied'}), 404
         member = member_result.data[0]
         if member.get('deputy_leader'):
             return jsonify({'success': False, 'message': 'This member is already the deputy leader.'}), 400
-        # Clear any existing deputy for this leader (enforce one deputy per leader)
+
         try:
             existing = supabase.table('cell_members').select('id').eq('leader_id', leader_id).eq('deputy_leader', True).execute()
-            if existing.data:
-                for row in existing.data:
-                    supabase.table('cell_members').update({'deputy_leader': False, 'can_login': False}).eq('id', row['id']).execute()
-        except Exception as clear_err:
-            print(f"Error clearing existing deputy (column may not exist): {clear_err}")
+            if existing.data and str(existing.data[0]['id']) != str(member_id):
+                return jsonify({
+                    'success': False,
+                    'message': (
+                        'A deputy is already assigned. Use “Request change of deputy” on their card '
+                        'and wait for cell portal approval to remove them before choosing a new deputy.'
+                    ),
+                }), 400
+        except Exception as ex:
+            print(f"Error checking existing deputy: {ex}")
+
         result = supabase.table('cell_members').update({
             'deputy_leader': True,
             'can_login': True
@@ -2487,10 +2876,74 @@ def set_deputy_leader(member_id):
                 )
             except Exception as e:
                 print(f"Error logging activity: {e}")
-            return jsonify({'success': True, 'message': 'Deputy leader assigned. This cannot be changed later.'})
+            return jsonify({'success': True, 'message': 'Deputy leader assigned.'})
         return jsonify({'success': False, 'message': 'Failed to assign deputy leader'}), 500
     except Exception as e:
         print(f"Error setting deputy leader: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@main_bp.route('/request_deputy_removal/<member_id>', methods=['POST'])
+def request_deputy_removal(member_id):
+    """
+    Leader requests removal of the current deputy via flagged_issues (issue_type=deputy_removal_request).
+    Cell portal should approve, then clear deputy_leader/can_login on that member row.
+    """
+    if 'user' not in session:
+        return jsonify({'success': False, 'message': 'Not authenticated'}), 401
+    if session['user'].get('is_deputy'):
+        return jsonify({'success': False, 'message': 'Only the cell leader can request a deputy change.'}), 403
+    try:
+        leader_id = get_effective_leader_id()
+        member_result = (
+            supabase.table('cell_members')
+            .select('id, name, deputy_leader')
+            .eq('id', member_id)
+            .eq('leader_id', leader_id)
+            .execute()
+        )
+        if not member_result.data:
+            return jsonify({'success': False, 'message': 'Member not found or access denied.'}), 404
+        member = member_result.data[0]
+        if not member.get('deputy_leader'):
+            return jsonify({'success': False, 'message': 'This member is not the deputy leader.'}), 400
+
+        if leader_has_pending_deputy_removal_request(supabase, leader_id):
+            return jsonify({'success': False, 'message': 'A deputy change request is already pending for your cell.'}), 400
+
+        member_name = member.get('name', 'Unknown')
+        flag_data = {
+            'member_id': member_id,
+            'leader_id': leader_id,
+            'issue_type': 'deputy_removal_request',
+            'description': f'Leader requested removal of deputy status for {member_name} (assign new deputy after approval).',
+            'status': 'pending',
+        }
+        result = supabase.table('flagged_issues').insert(flag_data).execute()
+        if result.data:
+            try:
+                log_activity(
+                    leader_id=leader_id,
+                    user_id=leader_id,
+                    activity_type='deputy_removal_requested',
+                    description=f'Requested deputy removal for: {member_name}',
+                    user_role='leader',
+                    user_name=session['user'].get('name', 'Leader'),
+                    source='cell_app',
+                    platform='web',
+                    details={'member_id': member_id, 'member_name': member_name, 'flag_id': result.data[0].get('id')},
+                )
+            except Exception as e:
+                print(f"Error logging deputy removal request: {e}")
+            return jsonify({
+                'success': True,
+                'message': 'Deputy change request sent to the cell portal for approval.',
+            })
+        return jsonify({'success': False, 'message': 'Could not submit request.'}), 500
+    except Exception as e:
+        print(f"Error requesting deputy removal: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'message': str(e)}), 500

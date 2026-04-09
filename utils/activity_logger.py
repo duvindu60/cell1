@@ -35,6 +35,7 @@ ACTIVITY_CATEGORIES = {
     'member_viewed': 'member',
     'member_imported': 'member',
     'member_delete_requested': 'member',
+    'deputy_removal_requested': 'member',
     
     # Attendance activities
     'attendance_marked': 'attendance',

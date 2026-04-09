@@ -1,0 +1,50 @@
+<div class="leaderboard-page">
+    <div class="lb-header">
+        <h1>Leaderboard</h1>
+        <input id="periodPicker" type="month" aria-label="Scoring period" />
+    </div>
+
+    <div id="lbLoading" class="state-card">Loading leaderboard...</div>
+    <div id="lbError" class="state-card error" style="display:none;"></div>
+    <div id="lbEmpty" class="state-card" style="display:none;">No leaderboard snapshot for this period yet.</div>
+
+    <section id="myStatsCard" class="card hero-card hero-crystal hero-crystal--muted" style="display:none;">
+        <div class="hero-crystal-shine" aria-hidden="true"></div>
+        <div class="hero-top">
+            <div class="hero-avatar-wrap">
+                <img id="myAvatarImg" class="hero-avatar-img" alt="" />
+                <div id="myAvatarFallback" class="hero-avatar-fallback"><i class="fas fa-user"></i></div>
+            </div>
+            <div class="hero-text">
+                <h2 id="myName">Hello, Leader</h2>
+                <p id="myTier" class="hero-tier">Unranked</p>
+            </div>
+            <div class="hero-rank-medal" id="heroRankMedal" title="" aria-hidden="true"></div>
+        </div>
+        <div class="exp-row">
+            <span class="exp-label">Exp</span>
+            <span id="myScore" class="exp-value">0</span>
+        </div>
+        <div class="exp-bar-track hero-exp-track"><div id="myScoreBar" class="exp-bar-fill hero-exp-fill"></div></div>
+    </section>
+
+    <section id="achievementsCard" class="card flat-card" style="display:none;">
+        <div class="section-title">Achievements</div>
+        <div id="achievementsRow" class="shields-row"></div>
+    </section>
+
+    <section id="tasksCard" class="card flat-card" style="display:none;">
+        <div class="section-title" id="tasksSectionLabel">Tasks</div>
+        <div id="tasksList" class="tasks-list"></div>
+    </section>
+
+    <section id="podiumCard" class="card flat-card podium-wrap" style="display:none;">
+        <div class="section-title">Top 3</div>
+        <div id="podium" class="podium-stage"></div>
+    </section>
+
+    <section id="topListCard" class="card flat-card" style="display:none;">
+        <div class="section-title">Ranks 4–10</div>
+        <div id="topList" class="top-list"></div>
+    </section>
+</div>

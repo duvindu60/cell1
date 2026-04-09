@@ -13,6 +13,19 @@
         </div>
         <h1>{{ member.name }}</h1>
         <p>Cell Member Details</p>
+        {% if delete_request_pending or flag_issue_pending or deputy_removal_pending %}
+        <div class="member-pending-banner" role="status">
+            {% if delete_request_pending %}
+            <span class="pending-pill pending-pill--delete"><i class="fas fa-trash-alt"></i> Delete request pending review</span>
+            {% endif %}
+            {% if flag_issue_pending %}
+            <span class="pending-pill pending-pill--flag"><i class="fas fa-flag"></i> Flag pending review</span>
+            {% endif %}
+            {% if deputy_removal_pending %}
+            <span class="pending-pill pending-pill--deputy"><i class="fas fa-user-shield"></i> Deputy change pending portal approval</span>
+            {% endif %}
+        </div>
+        {% endif %}
     </div>
 
 <!-- Member Information -->
@@ -89,7 +102,17 @@
                 <div class="detail-label">Deputy Leader</div>
                 <div class="detail-value">
                     {% if member.deputy_leader %}
-                        <span class="badge-deputy-leader"><i class="fas fa-user-shield"></i> Deputy Leader (cannot be changed)</span>
+                        <span class="badge-deputy-leader"><i class="fas fa-user-shield"></i> Deputy Leader</span>
+                        {% if not user.is_deputy %}
+                            {% if deputy_removal_pending %}
+                            <p class="deputy-removal-note mt-2 mb-0 text-muted small">A request to change deputy is awaiting cell portal approval.</p>
+                            {% else %}
+                            <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="btnRequestDeputyRemovalDesktop" onclick="requestDeputyRemovalDetail('{{ member.id }}', this)">
+                                <i class="fas fa-user-shield me-1"></i>Request change of deputy
+                            </button>
+                            <p class="deputy-removal-note mt-1 mb-0 text-muted small">Sends a request to the portal. After approval, deputy access is removed and you can assign someone else.</p>
+                            {% endif %}
+                        {% endif %}
                     {% else %}
                         <span style="color: #8b949e;">Not assigned</span>
                     {% endif %}
@@ -122,9 +145,15 @@
         <a href="{{ url_for('main.member_form', edit=member.id) }}" class="btn btn-warning" id="editBtn-desktop">
             <i class="fas fa-edit me-2"></i>Edit Member
         </a>
+        {% if flag_issue_pending %}
+        <button type="button" class="btn btn-secondary" disabled title="A flag is already awaiting review">
+            <i class="fas fa-flag me-2"></i>Flag Pending Review
+        </button>
+        {% else %}
         <button onclick="openFlagModal()" class="btn btn-flag">
             <i class="fas fa-flag me-2"></i>Flag Member
         </button>
+        {% endif %}
         {% if delete_request_pending %}
         <button class="btn btn-secondary" disabled>
             <i class="fas fa-trash me-2"></i>Delete Request Pending
@@ -274,6 +303,43 @@
     opacity: 0.9;
     position: relative;
     z-index: 1;
+}
+
+.member-pending-banner {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    padding: 0 1rem;
+    position: relative;
+    z-index: 1;
+}
+
+.pending-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 0.35rem 0.75rem;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.pending-pill--delete {
+    background: rgba(245, 158, 11, 0.25);
+    color: #fcd34d;
+}
+
+.pending-pill--flag {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+}
+
+.pending-pill--deputy {
+    background: rgba(59, 130, 246, 0.22);
+    color: #93c5fd;
 }
 
 /* Modern Member Info Card */
@@ -894,6 +960,31 @@ function confirmDelete() {
         document.body.appendChild(form);
         form.submit();
     }
+}
+
+function requestDeputyRemovalDetail(memberId, btn) {
+    if (btn && btn.disabled) return;
+    if (!confirm('Send a request to the cell portal to remove this deputy? After approval you can assign a new deputy from the members list.')) return;
+    if (btn) btn.disabled = true;
+    const url = '{{ url_for("main.request_deputy_removal", member_id="__ID__") }}'.replace('__ID__', memberId);
+    fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        body: '{}'
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.success) {
+            window.location.reload();
+        } else {
+            alert(data.message || 'Request failed');
+            if (btn) btn.disabled = false;
+        }
+    })
+    .catch(function() {
+        alert('Request failed. Please try again.');
+        if (btn) btn.disabled = false;
+    });
 }
 
 // Flag Modal Functions
