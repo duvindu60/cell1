@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, session, redirect, url_for, flash, request, jsonify
 from supabase import create_client, Client
-from datetime import datetime, timedelta, timezone, date
+from datetime import datetime, timedelta, timezone, date, time
 import os
 import hashlib
 import re
@@ -18,6 +18,61 @@ if SUPABASE_URL and SUPABASE_KEY:
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 else:
     supabase = None
+
+# PostgREST table for per-meeting visitor counts (Supabase: public.attendance_visitor_counts).
+ATTENDANCE_VISITOR_COUNTS_TABLE = 'attendance_visitor_counts'
+
+
+def ensure_leader_self_member_row(leader_id):
+    """Idempotent safety net: make sure the leader has a cell_members row with
+    is_leader=TRUE so their own attendance can be marked. Returns the row id or None.
+    Fails silently: the DB migration already handles this for existing leaders;
+    this only covers leaders onboarded after the migration."""
+    if not supabase or not leader_id:
+        return None
+    try:
+        existing = (
+            supabase.table('cell_members')
+            .select('id')
+            .eq('leader_id', leader_id)
+            .eq('is_leader', True)
+            .limit(1)
+            .execute()
+        )
+        if existing.data and len(existing.data) > 0:
+            return existing.data[0].get('id')
+
+        user_row = {}
+        try:
+            u_res = (
+                supabase.table('users')
+                .select('name, phone_number, country, branch_id, created_at')
+                .eq('id', leader_id)
+                .limit(1)
+                .execute()
+            )
+            if u_res.data and len(u_res.data) > 0:
+                user_row = u_res.data[0] or {}
+        except Exception as ue:
+            print(f"ensure_leader_self_member_row users lookup failed: {ue}")
+
+        payload = {
+            'leader_id': leader_id,
+            'name': user_row.get('name') or 'Cell Leader',
+            'phone_number': user_row.get('phone_number'),
+            'country': user_row.get('country'),
+            'branch_id': user_row.get('branch_id'),
+            'is_leader': True,
+        }
+        if user_row.get('created_at'):
+            payload['created_at'] = user_row['created_at']
+
+        ins = supabase.table('cell_members').insert(payload).execute()
+        if ins.data and len(ins.data) > 0:
+            return ins.data[0].get('id')
+    except Exception as e:
+        print(f"ensure_leader_self_member_row skipped for {leader_id}: {e}")
+    return None
 
 # Helper function to get user's created_at date
 def get_user_created_date(user_id):
@@ -105,6 +160,26 @@ def _str_url(val):
     return str(val).strip()
 
 
+def _pdf_url_for_slot(row, i):
+    """pdf_url_1..3; for slot 1 also accept legacy `pdf_url` (English) when pdf_url_1 is empty."""
+    if not isinstance(row, dict):
+        return ''
+    u = _str_url(row.get(f'pdf_url_{i}'))
+    if i == 1 and not u:
+        u = _str_url(row.get('pdf_url'))
+    return u
+
+
+def _video_url_for_slot(row, i):
+    """video_url_1..3; for slot 1 also accept legacy `video_url` when video_url_1 is empty."""
+    if not isinstance(row, dict):
+        return ''
+    u = _str_url(row.get(f'video_url_{i}'))
+    if i == 1 and not u:
+        u = _str_url(row.get('video_url'))
+    return u
+
+
 def _classify_tutorial_media(url):
     """Return 'video', 'pdf', or 'other' for grouping on the meeting tutorials page."""
     if not url:
@@ -145,12 +220,93 @@ def _tutorial_display_entry(row, url, title, description_fallback=None):
     }
 
 
-def build_tutorial_sections(rows):
-    """Expand each DB row into multiple cards: pdf_url_1..3, video_url_1..3, then legacy URL fields.
+_YT_ID_RE = re.compile(
+    r'(?:youtube\.com/(?:watch\?v=|embed/|shorts/)|youtu\.be/)([a-zA-Z0-9_-]{11})'
+)
+_YT_V_PARAM_RE = re.compile(r'[?&]v=([a-zA-Z0-9_-]{11})')
 
-    Numbered slots always become separate cards if the cell is non-empty, even when the same URL
-    is repeated in pdf_url_2 / video_url_3 etc. Legacy fields still skip URLs already used in any
-    numbered slot (unique set) so file_url does not duplicate a numbered link.
+
+def youtube_video_id_from_url(url):
+    """Return YouTube video id if URL is a recognizable YouTube link, else None."""
+    if not url:
+        return None
+    u = str(url).strip()
+    m = _YT_ID_RE.search(u)
+    if m:
+        return m.group(1)
+    m = _YT_V_PARAM_RE.search(u)
+    if m and 'youtube.com' in u.lower():
+        return m.group(1)
+    return None
+
+
+def build_tutorial_language_blocks(rows):
+    """Pair PDF + video per language: 1=English, 2=Sinhala, 3=Tamil.
+
+    Slot 1 also uses legacy columns `pdf_url` and `video_url` when `pdf_url_1` / `video_url_1`
+    are empty (common upload shape). Merges first non-empty URL per slot across rows.
+    """
+    labels = {
+        1: 'English tutorials',
+        2: 'Sinhala tutorials',
+        3: 'Tamil tutorials',
+    }
+    merged_pdf = {1: '', 2: '', 3: ''}
+    merged_vid = {1: '', 2: '', 3: ''}
+    meta_row = {1: None, 2: None, 3: None}
+
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        for i in (1, 2, 3):
+            pu = _pdf_url_for_slot(row, i)
+            vu = _video_url_for_slot(row, i)
+            if pu and not merged_pdf[i]:
+                merged_pdf[i] = pu
+            if vu and not merged_vid[i]:
+                merged_vid[i] = vu
+            if (pu or vu) and meta_row[i] is None:
+                meta_row[i] = row
+
+    blocks = []
+    for i in (1, 2, 3):
+        pdf_u = merged_pdf[i]
+        vid_u = merged_vid[i]
+        if not pdf_u and not vid_u:
+            continue
+        row = meta_row[i]
+        if row is None:
+            row = {}
+        base = row.get('tutorial_name') or row.get('title') or 'Tutorial'
+        desc_fb = base if base != 'Tutorial' else None
+
+        pdf_entry = None
+        if pdf_u:
+            pdf_entry = _tutorial_display_entry(row, pdf_u, f'PDF {i}', description_fallback=desc_fb)
+
+        video_entry = None
+        if vid_u:
+            video_entry = _tutorial_display_entry(row, vid_u, f'Video {i}', description_fallback=desc_fb)
+            yid = youtube_video_id_from_url(vid_u)
+            video_entry['youtube_id'] = yid
+            video_entry['youtube_embed_url'] = f'https://www.youtube.com/embed/{yid}' if yid else None
+            video_entry['youtube_watch_url'] = (
+                f'https://www.youtube.com/watch?v={yid}' if yid else vid_u
+            )
+
+        blocks.append({
+            'title': labels[i],
+            'slot': i,
+            'pdf': pdf_entry,
+            'video': video_entry,
+        })
+    return blocks
+
+
+def build_tutorial_legacy_sections(rows):
+    """Legacy columns only (file_url, pdf_url, …); skips URLs used by language slots.
+
+    Includes slot-1 resolution: pdf_url / video_url count as English when paired with pdf_url_1 / video_url_1.
     """
     pdfs, videos, other = [], [], []
     for row in rows or []:
@@ -158,31 +314,27 @@ def build_tutorial_sections(rows):
             continue
         base = row.get('tutorial_name') or row.get('title') or 'Tutorial'
         seen_any_numbered = set()
-
         for i in (1, 2, 3):
             u = _str_url(row.get(f'pdf_url_{i}'))
-            if not u:
-                continue
-            seen_any_numbered.add(u)
-            pdfs.append(
-                _tutorial_display_entry(
-                    row, u, f'PDF {i}', description_fallback=base if base != 'Tutorial' else None
-                )
-            )
-
-        for i in (1, 2, 3):
+            if u:
+                seen_any_numbered.add(u)
             u = _str_url(row.get(f'video_url_{i}'))
-            if not u:
-                continue
+            if u:
+                seen_any_numbered.add(u)
+            u = _pdf_url_for_slot(row, i)
+            if u:
+                seen_any_numbered.add(u)
+            u = _video_url_for_slot(row, i)
+            if u:
+                seen_any_numbered.add(u)
+        # Raw legacy English columns (avoid duplicate card when only pdf_url / video_url is set)
+        u = _str_url(row.get('pdf_url'))
+        if u:
             seen_any_numbered.add(u)
-            videos.append(
-                _tutorial_display_entry(
-                    row, u, f'Video {i}', description_fallback=base if base != 'Tutorial' else None
-                )
-            )
+        u = _str_url(row.get('video_url'))
+        if u:
+            seen_any_numbered.add(u)
 
-        # Unique URLs from numbered columns only — avoids duplicating those links via legacy keys.
-        # (Cards above already list every non-empty slot, including duplicate URLs across slots.)
         legacy_keys = (
             'file_url',
             'pdf_url',
@@ -526,29 +678,35 @@ def get_attendance_meeting_date_corrected():
     
     return attendance_tuesday
 
+
+def get_attendance_opening_datetime(meeting_date):
+    """First moment attendance may be marked for meeting_date (Tuesday): Tue 17:00:00 local."""
+    return datetime.combine(meeting_date, time(17, 0, 0))
+
+
 def get_attendance_deadline(meeting_date):
     """
     Get the attendance deadline datetime for a meeting date.
-    Deadline is Wednesday 11:59 PM of the meeting week.
-    
+    Deadline is Thursday 11:59:59 PM of the meeting week.
+
     Args:
         meeting_date: datetime.date object representing the Tuesday meeting date
-    
+
     Returns:
-        datetime: Deadline datetime (Wednesday 11:59 PM)
+        datetime: Deadline datetime (Thursday 11:59:59 PM)
     """
-    # Calculate the Wednesday of the meeting week (meeting_date is Tuesday, so Wednesday is +1 day)
-    meeting_wednesday = meeting_date + timedelta(days=1)
-    # Set deadline to Wednesday 11:59 PM
-    deadline = datetime.combine(meeting_wednesday, datetime.max.time().replace(hour=23, minute=59, second=59))
+    meeting_thursday = meeting_date + timedelta(days=2)
+    deadline = datetime.combine(
+        meeting_thursday, datetime.max.time().replace(hour=23, minute=59, second=59)
+    )
     return deadline
 
 
 def get_attendance_marking_countdown_payload(meeting_date):
     """
-    ISO timestamps for dashboard countdown: marking opens at start of meeting day (Tue 00:00),
-    closes Wednesday 23:59:59 local (same as get_attendance_deadline).
-    If that window has already ended (Thu–Mon), rolls forward to the next Tuesday's window
+    ISO timestamps for dashboard countdown: marking opens Tue 17:00 local,
+    closes Thursday 23:59:59 local (same as get_attendance_deadline).
+    If that window has already ended, rolls forward to the next Tuesday's window
     so the UI always shows an upcoming open/close pair.
     """
     if meeting_date is None:
@@ -556,7 +714,7 @@ def get_attendance_marking_countdown_payload(meeting_date):
     now = datetime.now()
     tuesday = meeting_date
     for _ in range(520):
-        opens_at = datetime.combine(tuesday, datetime.min.time())
+        opens_at = get_attendance_opening_datetime(tuesday)
         closes_at = get_attendance_deadline(tuesday)
         if now <= closes_at:
             return {
@@ -570,8 +728,7 @@ def get_attendance_marking_countdown_payload(meeting_date):
 def can_mark_attendance(meeting_date):
     """
     Check if attendance can be marked for a given meeting date.
-    Attendance can be marked from the meeting day (Tuesday) until Wednesday 11:59 PM.
-    Attendance cannot be marked before the meeting date.
+    Window: Tuesday 17:00 through Thursday 23:59:59 local (meeting_date is Tuesday).
 
     Args:
         meeting_date: datetime.date object representing the Tuesday meeting date
@@ -580,11 +737,9 @@ def can_mark_attendance(meeting_date):
         bool: True if attendance can be marked, False otherwise
     """
     now = datetime.now()
-    today = now.date()
+    opens = get_attendance_opening_datetime(meeting_date)
     deadline = get_attendance_deadline(meeting_date)
-
-    # Allow only on or after meeting date, and before deadline
-    return today >= meeting_date and now <= deadline
+    return opens <= now <= deadline
 
 def get_attendance_reminder_info(meeting_date):
     """
@@ -1334,6 +1489,9 @@ def attendance_detail(meeting_date):
                     # If member has no created_at, include it for backward compatibility
                     filtered_members.append(member)
             members = filtered_members
+
+        # Show the leader's own self-row first so it's prominent on the attendance page.
+        members.sort(key=lambda m: (0 if m.get('is_leader') else 1, (m.get('name') or '').lower()))
         
         # Get existing attendance data
         attendance_data = {}
@@ -1381,22 +1539,50 @@ def attendance_detail(meeting_date):
                     }
         
         # Check if attendance can be marked for this meeting date
-        # ALL attendance is locked after Wednesday 11:59 PM
+        # ALL attendance is locked after Thursday 23:59:59
         can_mark = False
         reminder_info = None
         if parsed_date:
             can_mark = can_mark_attendance(parsed_date)
             reminder_info = get_attendance_reminder_info(parsed_date)
+
+        meeting_date_iso = parsed_date.isoformat() if parsed_date else None
+        visitor_attendance = None
+        visitor_saved_time_label = None
+        if meeting_date_iso:
+            leader_uid = get_effective_leader_id()
+            try:
+                va_res = supabase.table(ATTENDANCE_VISITOR_COUNTS_TABLE).select(
+                    'id, leader_user_id, meeting_id, meeting_date, visitor_count, reported_at'
+                ).eq('leader_user_id', str(leader_uid)).eq('meeting_date', meeting_date_iso).limit(1).execute()
+                if va_res.data and len(va_res.data) > 0:
+                    visitor_attendance = va_res.data[0]
+                    ra = visitor_attendance.get('reported_at')
+                    if ra:
+                        try:
+                            if isinstance(ra, str):
+                                dt_ra = datetime.fromisoformat(ra.replace('Z', '+00:00'))
+                            else:
+                                dt_ra = ra
+                            visitor_saved_time_label = dt_ra.strftime('%H:%M') if hasattr(dt_ra, 'strftime') else None
+                        except (ValueError, TypeError):
+                            visitor_saved_time_label = None
+            except Exception as ve:
+                print(f"visitor_attendance fetch skipped: {ve}")
         
         template_name = f'main/attendance_detail{get_template_suffix()}.html'
         return render_template(template_name, 
                              user=session['user'],
                              meeting_date=meeting_date,
+                             meeting_date_iso=meeting_date_iso,
                              members=members,
                              attendance_data=attendance_data,
                              can_mark_attendance=can_mark,
                              reminder_info=reminder_info,
-                             leader_id=leader_id)
+                             leader_id=leader_id,
+                             visitor_attendance=visitor_attendance,
+                             visitor_saved_time_label=visitor_saved_time_label,
+                             can_edit_visitor_count=bool(can_mark and not session['user'].get('is_deputy')))
     except Exception as e:
         print(f"Error in attendance_detail: {e}")
         flash('Error loading attendance page', 'error')
@@ -1432,14 +1618,14 @@ def update_attendance(meeting_date):
                 parsed_date = None
         
         # Check if attendance can be marked for this meeting date
-        # ALL attendance is locked after Wednesday 11:59 PM
+        # ALL attendance is locked after Thursday 23:59:59
         if parsed_date:
             if not can_mark_attendance(parsed_date):
                 reminder_info = get_attendance_reminder_info(parsed_date)
-                deadline_str = reminder_info['deadline_str'] if reminder_info else 'Wednesday 11:59 PM'
+                deadline_str = reminder_info['deadline_str'] if reminder_info else 'Thursday 11:59 PM'
                 return jsonify({
                     'success': False, 
-                    'message': f'Attendance can only be marked until {deadline_str}. This week\'s attendance is now closed.'
+                    'message': f'Attendance can only be marked from Tuesday 5:00 PM through {deadline_str}. This week\'s attendance is now closed.'
                 }), 403
         
         # Get member info and validate it was created on or before meeting date
@@ -1609,14 +1795,14 @@ def bulk_update_attendance(meeting_date):
                 parsed_date = None
         
         # Check if attendance can be marked for this meeting date
-        # ALL attendance is locked after Wednesday 11:59 PM
+        # ALL attendance is locked after Thursday 23:59:59
         if parsed_date:
             if not can_mark_attendance(parsed_date):
                 reminder_info = get_attendance_reminder_info(parsed_date)
-                deadline_str = reminder_info['deadline_str'] if reminder_info else 'Wednesday 11:59 PM'
+                deadline_str = reminder_info['deadline_str'] if reminder_info else 'Thursday 11:59 PM'
                 return jsonify({
                     'success': False, 
-                    'message': f'Attendance can only be marked until {deadline_str}. This week\'s attendance is now closed.'
+                    'message': f'Attendance can only be marked from Tuesday 5:00 PM through {deadline_str}. This week\'s attendance is now closed.'
                 }), 403
         
         # Get meeting_number from meetings table
@@ -1740,6 +1926,121 @@ def bulk_update_attendance(meeting_date):
         traceback.print_exc()
         return jsonify({'success': False, 'message': f'Error updating attendance: {str(e)}'}), 500
 
+
+@main_bp.route('/update_visitor_attendance/<meeting_date>', methods=['POST'])
+def update_visitor_attendance(meeting_date):
+    """Persist visitor count (0-20) for the cell leader and meeting. Separate from member attendance rows."""
+    if 'user' not in session:
+        return jsonify({'success': False, 'message': 'Authentication required'}), 401
+    if session['user'].get('is_deputy'):
+        return jsonify({'success': False, 'message': 'Only cell leaders can report visitors.'}), 403
+    if supabase is None:
+        return jsonify({'success': False, 'message': 'Database is not configured.'}), 503
+
+    data = request.get_json(silent=True) or {}
+    if 'visitor_count' not in data:
+        return jsonify({'success': True, 'message': 'No visitor update requested', 'skipped': True})
+
+    vc_raw = data.get('visitor_count')
+    if vc_raw is None or vc_raw == '':
+        return jsonify({'success': True, 'message': 'No visitor update requested', 'skipped': True})
+
+    try:
+        vc = int(vc_raw)
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'message': 'Visitor count must be a whole number.'}), 400
+
+    if vc < 0 or vc > 20:
+        return jsonify({'success': False, 'message': 'Visitor count must be between 0 and 20.'}), 400
+
+    leader_uid = get_effective_leader_id()
+    if not leader_uid:
+        return jsonify({'success': False, 'message': 'Could not resolve leader for this session.'}), 401
+    leader_id_str = str(leader_uid)
+
+    try:
+        try:
+            parsed_date = datetime.strptime(meeting_date, "%B %d, %Y").date()
+            meeting_date_formatted = parsed_date.isoformat()
+        except ValueError:
+            meeting_date_formatted = meeting_date
+            try:
+                parsed_date = datetime.strptime(meeting_date, "%Y-%m-%d").date()
+            except ValueError:
+                parsed_date = None
+
+        if parsed_date:
+            if not can_mark_attendance(parsed_date):
+                reminder_info = get_attendance_reminder_info(parsed_date)
+                deadline_str = reminder_info['deadline_str'] if reminder_info else 'Thursday 11:59 PM'
+                return jsonify({
+                    'success': False,
+                    'message': f'Attendance can only be marked from Tuesday 5:00 PM through {deadline_str}. This week\'s attendance is now closed.'
+                }), 403
+
+        meeting_number = None
+        meeting_row_id = None
+        try:
+            meeting_result = supabase.table('meetings').select('id, meeting_number').eq('meeting_date', meeting_date_formatted).limit(1).execute()
+            if meeting_result.data and len(meeting_result.data) > 0:
+                mrow = meeting_result.data[0]
+                meeting_number = mrow.get('meeting_number')
+                meeting_row_id = mrow.get('id')
+        except Exception as e:
+            print(f"Error fetching meeting for visitor counts: {e}")
+
+        if meeting_number is None or meeting_row_id is None:
+            return jsonify({'success': False, 'message': 'Meeting not found. Cannot save visitor count.'}), 400
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        marked_by_uid = session['user'].get('id')
+        marked_by_name = session['user'].get('name') or session['user'].get('email') or 'Leader'
+        marked_uid_str = str(marked_by_uid) if marked_by_uid else leader_id_str
+
+        row_in = {
+            'leader_user_id': leader_id_str,
+            'meeting_id': str(meeting_row_id),
+            'meeting_date': meeting_date_formatted,
+            'meeting_number': meeting_number,
+            'visitor_count': vc,
+            'reported_at': now_iso,
+            'marked_by_user_id': marked_uid_str,
+            'marked_by_name': marked_by_name,
+        }
+
+        existing = supabase.table(ATTENDANCE_VISITOR_COUNTS_TABLE).select('id').eq(
+            'leader_user_id', leader_id_str
+        ).eq('meeting_date', meeting_date_formatted).limit(1).execute()
+
+        update_payload = {
+            'meeting_number': meeting_number,
+            'meeting_id': str(meeting_row_id),
+            'visitor_count': vc,
+            'reported_at': now_iso,
+            'marked_by_user_id': marked_uid_str,
+            'marked_by_name': marked_by_name,
+        }
+
+        if existing.data and len(existing.data) > 0:
+            supabase.table(ATTENDANCE_VISITOR_COUNTS_TABLE).update(update_payload).eq('id', existing.data[0]['id']).execute()
+        else:
+            supabase.table(ATTENDANCE_VISITOR_COUNTS_TABLE).insert(row_in).execute()
+
+        return jsonify({'success': True, 'message': 'Visitor count saved.'})
+    except Exception as e:
+        err_text = str(e)
+        print(f"Error in update_visitor_attendance: {err_text}")
+        traceback.print_exc()
+        hint = ''
+        low = err_text.lower()
+        if ('attendance_visitor_counts' in low or 'visitor_attendance' in low) and ('does not exist' in low or 'not found' in low):
+            hint = ' Ensure public.attendance_visitor_counts exists (see database/migrations/create_visitor_attendance_table.sql).'
+        elif 'column' in low and 'does not exist' in low:
+            hint = ' Check attendance_visitor_counts columns match the app (leader_user_id, meeting_id, …).'
+        msg = f'Could not save visitor count: {err_text}' + hint
+        return jsonify({'success': False, 'message': msg}), 500
+
+
 @main_bp.route('/members')
 def members():
     if 'user' not in session:
@@ -1752,8 +2053,15 @@ def members():
         # Use the user ID directly as leader_id (since role_id = 4 users ARE leaders)
         leader_id = get_effective_leader_id()
         
-        # Get members for this specific leader
-        result = supabase.table('cell_members').select('*').eq('leader_id', leader_id).execute()
+        # Get members for this specific leader (exclude the leader's own self-row;
+        # that row exists solely so the leader can mark their own attendance).
+        result = (
+            supabase.table('cell_members')
+            .select('*')
+            .eq('leader_id', leader_id)
+            .neq('is_leader', True)
+            .execute()
+        )
         members = result.data if result.data else []
         pending_map = pending_flagged_by_member_id(supabase, leader_id, [m.get('id') for m in members])
         for m in members:
@@ -1832,7 +2140,14 @@ def member_form():
     member = None
     if member_id:
         try:
-            result = supabase.table('cell_members').select('*').eq('id', member_id).eq('leader_id', leader_id).execute()
+            result = (
+                supabase.table('cell_members')
+                .select('*')
+                .eq('id', member_id)
+                .eq('leader_id', leader_id)
+                .neq('is_leader', True)
+                .execute()
+            )
             if result.data:
                 member = result.data[0]
         except Exception as e:
@@ -1858,8 +2173,15 @@ def member_details(member_id):
         # Use the user ID directly as leader_id
         leader_id = get_effective_leader_id()
         
-        # Get member with leader filter
-        result = supabase.table('cell_members').select('*').eq('id', member_id).eq('leader_id', leader_id).execute()
+        # Get member with leader filter (exclude leader's own self-row)
+        result = (
+            supabase.table('cell_members')
+            .select('*')
+            .eq('id', member_id)
+            .eq('leader_id', leader_id)
+            .neq('is_leader', True)
+            .execute()
+        )
         
         if result.data:
             member = result.data[0]
@@ -2179,7 +2501,14 @@ def update_member(member_id):
             'district': request.form.get('district') or None,
             'province': request.form.get('province') or None
         }
-        result = supabase.table('cell_members').update(member_data).eq('id', member_id).eq('leader_id', leader_id).execute()
+        result = (
+            supabase.table('cell_members')
+            .update(member_data)
+            .eq('id', member_id)
+            .eq('leader_id', leader_id)
+            .neq('is_leader', True)
+            .execute()
+        )
         # Log activity
         if result.data:
             log_activity(
@@ -2211,11 +2540,13 @@ def request_delete_member(member_id):
         leader_id = get_effective_leader_id()
 
         # Verify member belongs to this leader and get basic info
+        # (exclude the leader's own self-row so they can't delete themselves)
         member_result = (
             supabase.table('cell_members')
             .select('id, name')
             .eq('id', member_id)
             .eq('leader_id', leader_id)
+            .neq('is_leader', True)
             .execute()
         )
         if not member_result.data:
@@ -2310,7 +2641,8 @@ def meeting_tutorials(meeting_date):
 
         # Note: tutorials table doesn't have leader_id column, so we query by meeting_date only
         tutorials = load_tutorials_for_meeting_day(meeting_date_formatted, parsed_date)
-        tutorial_sections = build_tutorial_sections(tutorials)
+        tutorial_language_blocks = build_tutorial_language_blocks(tutorials)
+        tutorial_legacy_sections = build_tutorial_legacy_sections(tutorials)
 
         # Check if this is the next meeting date (use corrected tutorial logic)
         next_meeting_date = get_tutorial_meeting_date_corrected()
@@ -2329,7 +2661,8 @@ def meeting_tutorials(meeting_date):
             user=session['user'],
             meeting_date=meeting_date,
             tutorials=tutorials,
-            tutorial_sections=tutorial_sections,
+            tutorial_language_blocks=tutorial_language_blocks,
+            tutorial_legacy_sections=tutorial_legacy_sections,
             is_next_week=is_next_week,
             is_latest=False,
             no_tutorial_uploaded=len(tutorials) == 0,
@@ -2693,8 +3026,15 @@ def flag_member(member_id):
     try:
         leader_id = get_effective_leader_id()
         
-        # Verify member belongs to this leader
-        member_result = supabase.table('cell_members').select('*').eq('id', member_id).eq('leader_id', leader_id).execute()
+        # Verify member belongs to this leader (exclude leader's own self-row)
+        member_result = (
+            supabase.table('cell_members')
+            .select('*')
+            .eq('id', member_id)
+            .eq('leader_id', leader_id)
+            .neq('is_leader', True)
+            .execute()
+        )
         
         if not member_result.data:
             flash('Member not found or you do not have permission to flag this member', 'error')
@@ -2770,8 +3110,15 @@ def toggle_potential_leader(member_id):
     try:
         leader_id = get_effective_leader_id()
         
-        # Get current member data to verify ownership
-        member_result = supabase.table('cell_members').select('potential_leader').eq('id', member_id).eq('leader_id', leader_id).execute()
+        # Get current member data to verify ownership (skip leader's own self-row)
+        member_result = (
+            supabase.table('cell_members')
+            .select('potential_leader')
+            .eq('id', member_id)
+            .eq('leader_id', leader_id)
+            .neq('is_leader', True)
+            .execute()
+        )
         
         if not member_result.data or len(member_result.data) == 0:
             return jsonify({'success': False, 'message': 'Member not found or access denied'}), 404
@@ -2780,10 +3127,15 @@ def toggle_potential_leader(member_id):
         data = request.get_json()
         new_value = data.get('potential_leader', False)
         
-        # Update the potential_leader status
-        result = supabase.table('cell_members').update({
-            'potential_leader': bool(new_value)
-        }).eq('id', member_id).eq('leader_id', leader_id).execute()
+        # Update the potential_leader status (skip leader's own self-row)
+        result = (
+            supabase.table('cell_members')
+            .update({'potential_leader': bool(new_value)})
+            .eq('id', member_id)
+            .eq('leader_id', leader_id)
+            .neq('is_leader', True)
+            .execute()
+        )
         
         if result.data:
             # Log activity
@@ -2837,7 +3189,14 @@ def set_deputy_leader(member_id):
                 'message': 'A deputy change is already waiting for cell portal approval. Wait for it to finish before assigning.',
             }), 400
 
-        member_result = supabase.table('cell_members').select('id, name, deputy_leader').eq('id', member_id).eq('leader_id', leader_id).execute()
+        member_result = (
+            supabase.table('cell_members')
+            .select('id, name, deputy_leader')
+            .eq('id', member_id)
+            .eq('leader_id', leader_id)
+            .neq('is_leader', True)
+            .execute()
+        )
         if not member_result.data or len(member_result.data) == 0:
             return jsonify({'success': False, 'message': 'Member not found or access denied'}), 404
         member = member_result.data[0]
@@ -2857,10 +3216,14 @@ def set_deputy_leader(member_id):
         except Exception as ex:
             print(f"Error checking existing deputy: {ex}")
 
-        result = supabase.table('cell_members').update({
-            'deputy_leader': True,
-            'can_login': True
-        }).eq('id', member_id).eq('leader_id', leader_id).execute()
+        result = (
+            supabase.table('cell_members')
+            .update({'deputy_leader': True, 'can_login': True})
+            .eq('id', member_id)
+            .eq('leader_id', leader_id)
+            .neq('is_leader', True)
+            .execute()
+        )
         if result.data:
             try:
                 log_activity(
@@ -2902,6 +3265,7 @@ def request_deputy_removal(member_id):
             .select('id, name, deputy_leader')
             .eq('id', member_id)
             .eq('leader_id', leader_id)
+            .neq('is_leader', True)
             .execute()
         )
         if not member_result.data:

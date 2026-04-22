@@ -1,0 +1,2 @@
+-- Legacy: only if you had an old local table named visitor_attendance with leader_user_id.
+-- Production uses attendance_visitor_counts with leader_user_id (no rename needed).

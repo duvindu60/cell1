@@ -46,7 +46,7 @@
 
     <!-- Attendance Reminder Banner -->
     {% if attendance_reminder and not attendance_reminder.is_past_deadline and latest_attendance and latest_attendance.status != 'complete' %}
-    <div class="attendance-reminder-banner {% if attendance_reminder.is_urgent %}urgent{% elif attendance_reminder.is_approaching %}approaching{% endif %}" id="attendanceReminderBanner">
+    <div class="attendance-reminder-banner {% if attendance_reminder.is_urgent %}urgent{% elif attendance_reminder.is_approaching %}approaching{% endif %}" id="attendanceReminderBanner" data-deadline-iso="{{ attendance_reminder.deadline_iso }}">
         <div class="reminder-content">
             <div class="reminder-icon">
                 <i class="fas fa-{% if attendance_reminder.is_urgent %}exclamation-triangle{% else %}clock{% endif %}"></i>
@@ -1335,9 +1335,12 @@ function toggleQuickAccess(type) {
     }
 }
 
-{% if attendance_reminder and not attendance_reminder.is_past_deadline %}
 (function() {
-    const deadline = new Date('{{ attendance_reminder.deadline_iso }}');
+    const banner = document.getElementById('attendanceReminderBanner');
+    if (!banner) return;
+    const deadlineIso = banner.getAttribute('data-deadline-iso');
+    if (!deadlineIso) return;
+    const deadline = new Date(deadlineIso);
 
     function updateCountdown() {
         const now = new Date();
@@ -1379,10 +1382,9 @@ function toggleQuickAccess(type) {
     updateCountdown();
     setInterval(updateCountdown, 60000);
 })();
-{% endif %}
 
-{% if attendance_countdown %}
 (function() {
+    if (!document.getElementById('attendanceMarkingCountdownStrip')) return;
     function formatMarkingDuration(ms) {
         if (ms <= 0) return '0 mins';
         var totalMins = Math.floor(ms / 60000);
@@ -1400,9 +1402,7 @@ function toggleQuickAccess(type) {
         var c = new Date(closes.getTime());
         while (c.getTime() <= now) {
             o.setDate(o.getDate() + 7);
-            o.setHours(0, 0, 0, 0);
             c.setDate(c.getDate() + 7);
-            c.setHours(23, 59, 59, 0);
         }
         return { opens: o, closes: c };
     }
@@ -1438,6 +1438,5 @@ function toggleQuickAccess(type) {
     tickMarkingCountdown();
     setInterval(tickMarkingCountdown, 1000);
 })();
-{% endif %}
 </script>
 {% endblock %}

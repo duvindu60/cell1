@@ -22,9 +22,114 @@
         {% endif %}
     </div>
 
-    <!-- Tutorials by section: PDFs, videos, other links -->
-    {% if tutorial_sections %}
-        {% for section in tutorial_sections %}
+    <!-- Tutorials by language (PDF + video per slot), then legacy-only links -->
+    {% if tutorial_language_blocks or tutorial_legacy_sections %}
+        {% for block in tutorial_language_blocks %}
+        <div class="tutorial-section-block tutorial-lang-block">
+            <h2 class="tutorial-section-heading">
+                <i class="fas fa-language" aria-hidden="true"></i> {{ block.title }}
+            </h2>
+            <div class="tutorials-list">
+                {% if block.pdf %}
+                {% set tutorial = block.pdf %}
+                {% set res_url = (tutorial.file_url or '')|trim %}
+                <div class="tutorial-lang-item">
+                    {% if res_url|length > 0 %}
+                    <a href="{{ res_url }}" target="_blank" rel="noopener noreferrer" class="tutorial-link">
+                    {% endif %}
+                    <div class="tutorial-card-mobile">
+                        <div class="tutorial-header">
+                            <div class="tutorial-icon tutorial-icon--pdf">
+                                <i class="fas fa-file-pdf"></i>
+                            </div>
+                            <div class="tutorial-info">
+                                <h3>{{ tutorial.tutorial_name or tutorial.title or 'Tutorial' }}</h3>
+                                <p class="tutorial-date">{{ tutorial.meeting_date }}</p>
+                            </div>
+                        </div>
+                        {% if tutorial.description %}
+                        <div class="tutorial-description">
+                            <p>{{ tutorial.description }}</p>
+                        </div>
+                        {% endif %}
+                        <div class="tutorial-footer">
+                            <small class="text-muted">
+                                Uploaded: {% if tutorial.uploaded_at %}{% set ua = tutorial.uploaded_at|string %}{{ ua[:19].replace('T', ' at ') }}{% else %}Recently{% endif %}
+                            </small>
+                        </div>
+                    </div>
+                    {% if res_url|length > 0 %}
+                    </a>
+                    {% endif %}
+                </div>
+                {% endif %}
+                {% if block.video %}
+                {% set tutorial = block.video %}
+                <div class="tutorial-lang-item">
+                    {% if tutorial.youtube_embed_url %}
+                    <div class="tutorial-card-mobile tutorial-video-panel">
+                        <div class="tutorial-header">
+                            <div class="tutorial-icon tutorial-icon--video">
+                                <i class="fas fa-play-circle"></i>
+                            </div>
+                            <div class="tutorial-info">
+                                <h3>{{ tutorial.tutorial_name or tutorial.title or 'Tutorial' }}</h3>
+                                <p class="tutorial-date">{{ tutorial.meeting_date }}</p>
+                            </div>
+                        </div>
+                        <div class="ratio ratio-16x9 tutorial-youtube-wrap">
+                            <iframe src="{{ tutorial.youtube_embed_url }}" title="YouTube video" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+                        </div>
+                        <a href="{{ tutorial.youtube_watch_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-youtube-watch w-100 mt-3">
+                            <i class="fab fa-youtube me-2" aria-hidden="true"></i>Watch on YouTube
+                        </a>
+                        {% if tutorial.description %}
+                        <div class="tutorial-description mt-3">
+                            <p>{{ tutorial.description }}</p>
+                        </div>
+                        {% endif %}
+                        <div class="tutorial-footer">
+                            <small class="text-muted">
+                                Uploaded: {% if tutorial.uploaded_at %}{% set ua = tutorial.uploaded_at|string %}{{ ua[:19].replace('T', ' at ') }}{% else %}Recently{% endif %}
+                            </small>
+                        </div>
+                    </div>
+                    {% else %}
+                    {% set res_url = (tutorial.file_url or '')|trim %}
+                    {% if res_url|length > 0 %}
+                    <a href="{{ res_url }}" target="_blank" rel="noopener noreferrer" class="tutorial-link">
+                    {% endif %}
+                    <div class="tutorial-card-mobile">
+                        <div class="tutorial-header">
+                            <div class="tutorial-icon tutorial-icon--video">
+                                <i class="fas fa-play-circle"></i>
+                            </div>
+                            <div class="tutorial-info">
+                                <h3>{{ tutorial.tutorial_name or tutorial.title or 'Tutorial' }}</h3>
+                                <p class="tutorial-date">{{ tutorial.meeting_date }}</p>
+                            </div>
+                        </div>
+                        {% if tutorial.description %}
+                        <div class="tutorial-description">
+                            <p>{{ tutorial.description }}</p>
+                        </div>
+                        {% endif %}
+                        <div class="tutorial-footer">
+                            <small class="text-muted">
+                                Uploaded: {% if tutorial.uploaded_at %}{% set ua = tutorial.uploaded_at|string %}{{ ua[:19].replace('T', ' at ') }}{% else %}Recently{% endif %}
+                            </small>
+                        </div>
+                    </div>
+                    {% if res_url|length > 0 %}
+                    </a>
+                    {% endif %}
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+        {% for section in tutorial_legacy_sections %}
         <div class="tutorial-section-block">
             <h2 class="tutorial-section-heading">
                 {% if section.kind == 'pdf' %}
@@ -201,6 +306,31 @@
 .tutorial-section-heading i {
     color: #3b82f6;
     font-size: 1rem;
+}
+
+.tutorial-lang-block .tutorial-youtube-wrap {
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #475569;
+    background: #0f172a;
+}
+.tutorial-lang-block .tutorial-youtube-wrap iframe {
+    border: 0;
+}
+.btn-youtube-watch {
+    background: #ff0000;
+    border: none;
+    color: #fff !important;
+    font-weight: 600;
+    border-radius: 10px;
+    padding: 0.65rem 1rem;
+}
+.btn-youtube-watch:hover {
+    background: #cc0000;
+    color: #fff !important;
+}
+.tutorial-lang-item + .tutorial-lang-item {
+    margin-top: 0.25rem;
 }
 
 .tutorial-icon--video {

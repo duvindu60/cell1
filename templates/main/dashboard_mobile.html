@@ -1285,9 +1285,7 @@ function toggleQuickAccess(type) {
         var c = new Date(closes.getTime());
         while (c.getTime() <= now) {
             o.setDate(o.getDate() + 7);
-            o.setHours(0, 0, 0, 0);
             c.setDate(c.getDate() + 7);
-            c.setHours(23, 59, 59, 0);
         }
         return { opens: o, closes: c };
     }

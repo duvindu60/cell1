@@ -64,7 +64,7 @@
                             <span class="avatar-text">{{ member.name[0].upper() }}</span>
                         </div>
                         <div class="member-details">
-                            <h6 class="member-name">{{ member.name }}</h6>
+                            <h6 class="member-name">{{ member.name }}{% if member.is_leader %} <span class="leader-self-badge">(You)</span>{% endif %}</h6>
                             <div class="member-meta">
                                 {% if member.phone_number %}
                                 <span class="meta-item">
@@ -127,6 +127,26 @@
             </div>
         {% endif %}
     </div>
+
+    {% if meeting_date_iso and (can_edit_visitor_count or visitor_attendance) %}
+    <div class="visitor-card visitor-card-mobile">
+        <h5 class="visitor-title">Visitors today</h5>
+        <p class="visitor-hint">Optional. Uses keyboard or &minus; / +. Max 20. Saved when you submit attendance. Not included in member attendance %.</p>
+        <div class="visitor-stepper">
+            <button type="button" class="visitor-btn" aria-label="Decrease" {% if not can_edit_visitor_count %}disabled{% endif %}
+                onclick="adjustVisitorField('visitorCountInputMobile', -1)">&minus;</button>
+            <input type="number" id="visitorCountInputMobile" class="visitor-input" min="0" max="20" step="1" inputmode="numeric" autocomplete="off" placeholder=""
+                {% if visitor_attendance %}value="{{ visitor_attendance.visitor_count }}"{% endif %}
+                {% if not can_edit_visitor_count %}readonly{% endif %}
+                onblur="clampVisitorField(this)" />
+            <button type="button" class="visitor-btn" aria-label="Increase" {% if not can_edit_visitor_count %}disabled{% endif %}
+                onclick="adjustVisitorField('visitorCountInputMobile', 1)">+</button>
+        </div>
+        {% if visitor_saved_time_label and visitor_attendance %}
+        <p class="visitor-saved">Last saved {{ visitor_saved_time_label }} by You</p>
+        {% endif %}
+    </div>
+    {% endif %}
 </div>
 
 <!-- Mobile CSS -->
@@ -395,6 +415,66 @@
     margin-top: 0.25rem;
 }
 
+.visitor-card-mobile {
+    margin-top: 1rem;
+    padding: 1.25rem;
+    background: #2c3e50;
+    border-radius: 16px;
+    border: 1px solid #34495e;
+}
+.visitor-title {
+    color: #fff;
+    font-weight: 700;
+    margin: 0 0 0.35rem 0;
+    font-size: 1rem;
+}
+.visitor-hint {
+    color: #95a5a6;
+    font-size: 0.78rem;
+    margin: 0 0 0.75rem 0;
+    line-height: 1.35;
+}
+.visitor-stepper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+.visitor-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    border: 1px solid #475569;
+    background: #34495e;
+    color: #fff;
+    font-size: 1.25rem;
+    line-height: 1;
+    cursor: pointer;
+}
+.visitor-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+.visitor-input {
+    width: 88px;
+    text-align: center;
+    font-size: 1.25rem;
+    font-weight: 700;
+    padding: 0.4rem;
+    border-radius: 10px;
+    border: 1px solid #475569;
+    background: #1a1a1a;
+    color: #fff;
+}
+.visitor-input:read-only {
+    opacity: 0.9;
+}
+.visitor-saved {
+    margin: 0.5rem 0 0 0;
+    font-size: 0.8rem;
+    color: #94a3b8;
+}
+
 .marked-by-desktop {
     font-size: 0.8rem;
     color: #8b949e;
@@ -565,6 +645,35 @@ function updateStatsMobile() {
     }
 }
 
+window.clampVisitorField = function(el) {
+    if (!el || el.readOnly) return;
+    const v = String(el.value).trim();
+    if (v === '') return;
+    let n = parseInt(v, 10);
+    if (isNaN(n)) {
+        el.value = '';
+        return;
+    }
+    n = Math.max(0, Math.min(20, n));
+    el.value = String(n);
+};
+
+window.adjustVisitorField = function(inputId, delta) {
+    const el = document.getElementById(inputId);
+    if (!el || el.readOnly) return;
+    let n;
+    const raw = String(el.value).trim();
+    if (raw === '') {
+        if (delta < 0) return;
+        n = 1;
+    } else {
+        n = parseInt(raw, 10);
+        if (isNaN(n)) n = 0;
+        n = Math.max(0, Math.min(20, n + delta));
+    }
+    el.value = String(n);
+};
+
 function showFeedbackMobile(message, type) {
     // Create toast notification
     const toast = document.createElement('div');
@@ -734,7 +843,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <span class="avatar-text-desktop">{{ member.name[0].upper() }}</span>
                             </div>
                             <div class="member-info-desktop">
-                                <h5 class="member-name-desktop">{{ member.name }}</h5>
+                                <h5 class="member-name-desktop">{{ member.name }}{% if member.is_leader %} <span class="leader-self-badge">(You)</span>{% endif %}</h5>
                                 <div class="member-details-desktop">
                                     {% if member.phone_number %}
                                     <div class="detail-item">
@@ -796,6 +905,26 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
         {% endif %}
     </div>
+
+    {% if meeting_date_iso and (can_edit_visitor_count or visitor_attendance) %}
+    <div class="visitor-card visitor-card-desktop">
+        <h5 class="visitor-title-desktop">Visitors today</h5>
+        <p class="visitor-hint-desktop">Optional. Type a number (0&ndash;20) or use &minus; / +. Saved when you submit attendance. Not included in member attendance %.</p>
+        <div class="visitor-stepper visitor-stepper-desktop">
+            <button type="button" class="visitor-btn-desktop" aria-label="Decrease" {% if not can_edit_visitor_count %}disabled{% endif %}
+                onclick="adjustVisitorField('visitorCountInputDesktop', -1)">&minus;</button>
+            <input type="number" id="visitorCountInputDesktop" class="visitor-input-desktop" min="0" max="20" step="1" inputmode="numeric" autocomplete="off"
+                {% if visitor_attendance %}value="{{ visitor_attendance.visitor_count }}"{% endif %}
+                {% if not can_edit_visitor_count %}readonly{% endif %}
+                onblur="clampVisitorField(this)" />
+            <button type="button" class="visitor-btn-desktop" aria-label="Increase" {% if not can_edit_visitor_count %}disabled{% endif %}
+                onclick="adjustVisitorField('visitorCountInputDesktop', 1)">+</button>
+        </div>
+        {% if visitor_saved_time_label and visitor_attendance %}
+        <p class="visitor-saved-desktop">Last saved {{ visitor_saved_time_label }} by You</p>
+        {% endif %}
+    </div>
+    {% endif %}
     
     <!-- Attendance Locked Warning -->
     {% if not can_mark_attendance %}
@@ -805,7 +934,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <i class="fas fa-lock" style="font-size: 24px;"></i>
                 <div>
                     <h5 style="margin: 0 0 5px 0; font-weight: 600;">Attendance Locked</h5>
-                    <p style="margin: 0; opacity: 0.95;">Attendance can only be marked until Wednesday. This week's attendance is now closed.</p>
+                    <p style="margin: 0; opacity: 0.95;">Attendance can only be marked from Tuesday 5:00 PM through Thursday 11:59 PM. This week's attendance is now closed.</p>
                 </div>
             </div>
         </div>
@@ -839,6 +968,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div class="summary-item-desktop">
                         <span class="summary-label-desktop">Absent:</span>
                         <span class="summary-value-desktop absent-value-desktop" id="confirmAbsentCountDesktop">0</span>
+                    </div>
+                    <div class="summary-item-desktop">
+                        <span class="summary-label-desktop">Visitors (optional):</span>
+                        <span class="summary-value-desktop" id="confirmVisitorCountDesktop">—</span>
                     </div>
                 </div>
             </div>
@@ -945,6 +1078,62 @@ document.addEventListener('DOMContentLoaded', function() {
     border: 1px solid #34495e;
 }
 
+.visitor-card-desktop {
+    margin-top: 1.5rem;
+    padding: 1.5rem 2rem;
+    background: #21262d;
+    border-radius: 16px;
+    border: 1px solid #30363d;
+}
+.visitor-title-desktop {
+    color: #f0f6fc;
+    font-weight: 700;
+    margin: 0 0 0.35rem 0;
+    font-size: 1.1rem;
+}
+.visitor-hint-desktop {
+    color: #8b949e;
+    font-size: 0.85rem;
+    margin: 0 0 1rem 0;
+    line-height: 1.4;
+}
+.visitor-stepper-desktop {
+    justify-content: flex-start;
+}
+.visitor-btn-desktop {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    border: 1px solid #30363d;
+    background: #21262d;
+    color: #f0f6fc;
+    font-size: 1.35rem;
+    cursor: pointer;
+}
+.visitor-btn-desktop:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+.visitor-input-desktop {
+    width: 100px;
+    text-align: center;
+    font-size: 1.35rem;
+    font-weight: 700;
+    padding: 0.5rem;
+    border-radius: 10px;
+    border: 1px solid #30363d;
+    background: #0d1117;
+    color: #f0f6fc;
+}
+.visitor-input-desktop:read-only {
+    opacity: 0.9;
+}
+.visitor-saved-desktop {
+    margin: 0.75rem 0 0 0;
+    font-size: 0.85rem;
+    color: #8b949e;
+}
+
 .section-header-desktop {
     text-align: center;
     margin-bottom: 2rem;
@@ -1032,6 +1221,18 @@ document.addEventListener('DOMContentLoaded', function() {
     color: white;
     font-weight: bold;
     margin-bottom: 0.5rem;
+}
+
+.leader-self-badge {
+    display: inline-block;
+    margin-left: 0.35rem;
+    padding: 0.1rem 0.45rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #0b3d91;
+    background: rgba(255, 255, 255, 0.85);
+    border-radius: 999px;
+    vertical-align: middle;
 }
 
 .member-details-desktop {
@@ -1529,6 +1730,13 @@ function updateCountsDesktop() {
     if (pendingCountEl) pendingCountEl.textContent = 0; // No pending with checkbox system
 }
 
+window.getVisitorCountInputForAttendanceDetail = function() {
+    if (window.matchMedia('(min-width: 992px)').matches) {
+        return document.getElementById('visitorCountInputDesktop');
+    }
+    return document.getElementById('visitorCountInputMobile') || document.getElementById('visitorCountInputDesktop');
+};
+
 // Show confirmation modal
 window.submitAttendanceDesktop = function() {
     {% if not can_mark_attendance %}
@@ -1543,7 +1751,16 @@ window.submitAttendanceDesktop = function() {
     
     document.getElementById('confirmPresentCountDesktop').textContent = presentCount;
     document.getElementById('confirmAbsentCountDesktop').textContent = absentCount;
-    
+    const vIn = window.getVisitorCountInputForAttendanceDetail();
+    const vRow = document.getElementById('confirmVisitorCountDesktop');
+    if (vRow) {
+        if (vIn && String(vIn.value).trim() !== '') {
+            vRow.textContent = String(vIn.value).trim();
+        } else {
+            vRow.textContent = '—';
+        }
+    }
+
     const modal = document.getElementById('confirmModalDesktop');
     if (modal) {
         modal.style.display = 'flex';
@@ -1560,7 +1777,32 @@ window.closeConfirmModalDesktop = function() {
 
 // Show attendance locked message
 window.showAttendanceLockedMessage = function() {
-    alert('Attendance can only be marked until Wednesday. This week\'s attendance is now closed.');
+    alert('Attendance can only be marked from Tuesday 5:00 PM through Thursday 11:59 PM. This week\'s attendance is now closed.');
+}
+
+function postVisitorAfterBulkIfNeededDesktop(meetingDate) {
+    const el = window.getVisitorCountInputForAttendanceDetail();
+    if (!el || el.readOnly) return Promise.resolve(null);
+    clampVisitorField(el);
+    const raw = String(el.value).trim();
+    if (raw === '') return Promise.resolve(null);
+    const n = parseInt(raw, 10);
+    if (isNaN(n) || n < 0 || n > 20) return Promise.resolve(null);
+    return fetch(`/update_visitor_attendance/${encodeURIComponent(meetingDate)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ visitor_count: n })
+    }).then(function(r) {
+        return r.json().then(function(data) {
+            if (r.status === 403) {
+                return { visitorLocked: true, message: data.message || 'Attendance is locked for visitors.' };
+            }
+            if (!r.ok || !data.success) {
+                return { visitorError: true, message: data.message || 'Could not save visitor count.' };
+            }
+            return null;
+        });
+    });
 }
 
 // Confirm and submit attendance
@@ -1621,11 +1863,22 @@ window.confirmSubmitDesktop = function() {
         })
         .then(data => {
             if (data.success) {
-                closeConfirmModalDesktop();
-                showFeedbackDesktop(data.message, 'success');
-                setTimeout(() => {
-                    window.location.reload();
-                }, 1500);
+                return postVisitorAfterBulkIfNeededDesktop(meetingDate).then(function(extra) {
+                    closeConfirmModalDesktop();
+                    showFeedbackDesktop(data.message, 'success');
+                    if (extra && extra.visitorLocked) {
+                        setTimeout(function() {
+                            showFeedbackDesktop(extra.message, 'error');
+                        }, 400);
+                    } else if (extra && extra.visitorError) {
+                        setTimeout(function() {
+                            showFeedbackDesktop(extra.message, 'error');
+                        }, 400);
+                    }
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                });
             } else {
                 showFeedbackDesktop(data.message || 'Error submitting attendance', 'error');
                 confirmBtn.disabled = false;

@@ -103,6 +103,11 @@ def login():
                         'role_id': user_data.get('role_id')
                     }
                     try:
+                        from routes.main import ensure_leader_self_member_row
+                        ensure_leader_self_member_row(user_id)
+                    except Exception as le:
+                        print(f"ensure_leader_self_member_row skipped: {le}")
+                    try:
                         log_activity(
                             leader_id=user_id,
                             user_id=user_id,
