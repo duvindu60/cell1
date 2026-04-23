@@ -171,16 +171,19 @@
                 <div class="form-help">Auto-filled from leader's information</div>
             </div>
 
-            <!-- Branch ID - Autofilled from Leader -->
+            <!-- Branch Name - Autofilled from Leader -->
             <div class="form-group">
-                <label for="branch_id" class="form-label">
-                    <i class="fas fa-building"></i>Branch ID
+                <label for="branch_name" class="form-label">
+                    <i class="fas fa-building"></i>Branch Name
                 </label>
-                <input type="text" 
+                <input type="hidden" 
                        id="branch_id" 
                        name="branch_id" 
+                       value="{{ leader_branch_id if leader_branch_id else (member.branch_id if member and member.branch_id else '') }}">
+                <input type="text" 
+                       id="branch_name" 
                        readonly
-                       value="{{ leader_branch_id if leader_branch_id else (member.branch_id if member and member.branch_id else '') }}"
+                       value="{{ leader_branch_name if leader_branch_name else (member.branch_id if member and member.branch_id else '') }}"
                        class="form-input"
                        style="background: #161b22; color: #8b949e; cursor: not-allowed;"
                        placeholder="Auto-filled from leader">
@@ -214,20 +217,6 @@
                 <div class="form-help" style="margin-left: 32px;">Check if member is part of the church</div>
             </div>
 
-            <!-- Potential Leader - Boolean Checkbox -->
-            <div class="form-group">
-                <label class="form-label" style="display: flex; align-items: center; cursor: pointer;">
-                    <input type="checkbox" 
-                           id="potential_leader" 
-                           name="potential_leader" 
-                           value="true"
-                           {{ 'checked' if request.form.potential_leader == 'true' or (member and member.potential_leader == True) else '' }}
-                           style="width: 20px; height: 20px; margin-right: 12px; cursor: pointer; accent-color: #3b82f6;">
-                    <i class="fas fa-user-tie"></i>Potential Leader
-                </label>
-                <div class="form-help" style="margin-left: 32px;">Check if member has potential to be a leader</div>
-            </div>
-            
             <!-- Form Actions -->
             <div class="form-actions">
                 <a href="{{ url_for('main.members') }}" class="btn btn-cancel">

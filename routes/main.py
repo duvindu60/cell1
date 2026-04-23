@@ -104,6 +104,40 @@ def get_user_created_date(user_id):
     return None
 
 
+def get_leader_location_context(leader_id):
+    """Return leader branch/country values used by member forms."""
+    leader_branch_id = None
+    leader_country = None
+    leader_branch_name = None
+    try:
+        user_result = (
+            supabase.table('users')
+            .select('branch_id, country')
+            .eq('id', leader_id)
+            .limit(1)
+            .execute()
+        )
+        if user_result.data and len(user_result.data) > 0:
+            leader_branch_id = user_result.data[0].get('branch_id')
+            leader_country = user_result.data[0].get('country')
+            if leader_branch_id is not None:
+                try:
+                    branch_result = (
+                        supabase.table('branches')
+                        .select('name')
+                        .eq('id', leader_branch_id)
+                        .limit(1)
+                        .execute()
+                    )
+                    if branch_result.data and len(branch_result.data) > 0:
+                        leader_branch_name = branch_result.data[0].get('name')
+                except Exception as branch_error:
+                    print(f"Error fetching leader branch name: {branch_error}")
+    except Exception as e:
+        print(f"Error fetching leader location context: {e}")
+    return leader_branch_id, leader_country, leader_branch_name
+
+
 def _tutorial_resource_url(tutorial):
     """First non-empty URL on a tutorial row (legacy helpers / dashboards)."""
     if not tutorial or not isinstance(tutorial, dict):
@@ -2099,19 +2133,9 @@ def member_form():
     r = redirect_deputy_to_attendance()
     if r:
         return r
-    # Get leader's branch_id and country for autofill
+    # Get leader location context for autofill
     leader_id = get_effective_leader_id()
-    leader_branch_id = None
-    leader_country = None
-    
-    try:
-        # Fetch leader's branch_id and country from users table
-        user_result = supabase.table('users').select('branch_id, country').eq('id', leader_id).execute()
-        if user_result.data and len(user_result.data) > 0:
-            leader_branch_id = user_result.data[0].get('branch_id')
-            leader_country = user_result.data[0].get('country')
-    except Exception as e:
-        print(f"Error fetching leader's branch_id and country: {e}")
+    leader_branch_id, leader_country, leader_branch_name = get_leader_location_context(leader_id)
     
     # Fetch zones from zones table with sector_number from sectors table
     zones = []
@@ -2159,6 +2183,7 @@ def member_form():
                          member=member, 
                          is_edit=bool(member_id),
                          leader_branch_id=leader_branch_id,
+                         leader_branch_name=leader_branch_name,
                          leader_country=leader_country,
                          zones=zones)
 @main_bp.route('/member/<member_id>')
@@ -2246,17 +2271,9 @@ def add_member():
         form_errors['phone_number'] = 'Phone number must be 10-15 digits'
     # If there are validation errors, return to form with errors
     if form_errors:
-        # Get leader's branch_id and country for autofill
+        # Get leader location context for autofill
         leader_id = get_effective_leader_id()
-        leader_branch_id = None
-        leader_country = None
-        try:
-            user_result = supabase.table('users').select('branch_id, country').eq('id', leader_id).execute()
-            if user_result.data and len(user_result.data) > 0:
-                leader_branch_id = user_result.data[0].get('branch_id')
-                leader_country = user_result.data[0].get('country')
-        except Exception as e:
-            print(f"Error fetching leader's branch_id and country: {e}")
+        leader_branch_id, leader_country, leader_branch_name = get_leader_location_context(leader_id)
         
         # Fetch zones for error case with sector_number from sectors table
         zones = []
@@ -2284,22 +2301,15 @@ def add_member():
                              user=session['user'], 
                              form_errors=form_errors,
                              leader_branch_id=leader_branch_id,
+                             leader_branch_name=leader_branch_name,
                              leader_country=leader_country,
                              zones=zones)
     try:
         # Use the user ID directly as leader_id (since role_id = 4 users ARE leaders)
         leader_id = get_effective_leader_id()
         
-        # Get leader's branch_id and country for autofill
-        leader_branch_id = None
-        leader_country = None
-        try:
-            user_result = supabase.table('users').select('branch_id, country').eq('id', leader_id).execute()
-            if user_result.data and len(user_result.data) > 0:
-                leader_branch_id = user_result.data[0].get('branch_id')
-                leader_country = user_result.data[0].get('country')
-        except Exception as e:
-            print(f"Error fetching leader's branch_id and country: {e}")
+        # Get leader location context for autofill
+        leader_branch_id, leader_country, leader_branch_name = get_leader_location_context(leader_id)
         
         # Get form values or use leader's values for autofill
         country = request.form.get('country') or leader_country
@@ -2396,22 +2406,15 @@ def add_member():
                                  user=session['user'], 
                                  form_errors={'general': 'Failed to add member to database'},
                                  leader_branch_id=leader_branch_id,
+                                 leader_branch_name=leader_branch_name,
                                  leader_country=leader_country,
                                  zones=zones)
     except Exception as e:
         error_msg = str(e)
         flash(f'Error adding member: {error_msg}', 'error')
-        # Get leader's branch_id and country for autofill
+        # Get leader location context for autofill
         leader_id = get_effective_leader_id()
-        leader_branch_id = None
-        leader_country = None
-        try:
-            user_result = supabase.table('users').select('branch_id, country').eq('id', leader_id).execute()
-            if user_result.data and len(user_result.data) > 0:
-                leader_branch_id = user_result.data[0].get('branch_id')
-                leader_country = user_result.data[0].get('country')
-        except Exception as e:
-            print(f"Error fetching leader's branch_id and country: {e}")
+        leader_branch_id, leader_country, leader_branch_name = get_leader_location_context(leader_id)
         
         # Fetch zones for error case with sector_number from sectors table
         zones = []
@@ -2439,6 +2442,7 @@ def add_member():
                              user=session['user'], 
                              form_errors={'general': error_msg},
                              leader_branch_id=leader_branch_id,
+                             leader_branch_name=leader_branch_name,
                              leader_country=leader_country,
                              zones=zones)
 @main_bp.route('/update_member/<member_id>', methods=['POST'])

@@ -25,6 +25,12 @@ def create_app(config_name=None):
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
     app.register_blueprint(api_bp)
+
+    @app.route('/.well-known/appspecific/com.chrome.devtools.json')
+    def chrome_devtools_probe():
+        # Chrome/DevTools may probe this optional metadata endpoint.
+        # Return 204 to avoid noisy 404 log entries.
+        return '', 204
     
     return app
 
