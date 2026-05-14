@@ -1,3 +1,8 @@
+# Deploy hosts run `docker pull` from GHCR; they must authenticate first.
+# Optional: set repo secrets GHCR_PULL_TOKEN (PAT with read:packages) + GHCR_USERNAME if
+# `GITHUB_TOKEN` cannot read the image (e.g. package owned by another user/org).
+# See: https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages
+
 name: Docker Build and Deploy
 
 on:
@@ -9,6 +14,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: duvindu60/cellapp
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build-and-push:
@@ -20,7 +26,7 @@ jobs:
       image: ${{ steps.meta.outputs.image }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -42,9 +48,23 @@ jobs:
     needs: build-and-push
     if: github.ref == 'refs/heads/test'
     runs-on: [self-hosted, test-sever]
+    permissions:
+      contents: read
+      packages: read
     steps:
       - name: Deploy test container
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_PAT: ${{ secrets.GHCR_PULL_TOKEN }}
+          GHCR_USER: ${{ secrets.GHCR_USERNAME }}
         run: |
+          set -e
+          OWNER_LOWER="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          if [ -n "$GHCR_PAT" ] && [ -n "$GHCR_USER" ]; then
+            echo "$GHCR_PAT" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+          else
+            echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$OWNER_LOWER" --password-stdin
+          fi
           IMAGE="${{ needs.build-and-push.outputs.image }}"
           docker pull "$IMAGE"
           docker rm -f cellapp-test || true
@@ -60,14 +80,24 @@ jobs:
     needs: build-and-push
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
     steps:
       - name: Deploy production container
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ secrets.PROD_SERVER_HOST }}
           username: ${{ secrets.PROD_SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY_PROD }}
           script: |
+            set -e
+            OWNER_LOWER="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+            if [ -n "${{ secrets.GHCR_PULL_TOKEN }}" ] && [ -n "${{ secrets.GHCR_USERNAME }}" ]; then
+              echo "${{ secrets.GHCR_PULL_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
+            else
+              echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "$OWNER_LOWER" --password-stdin
+            fi
             IMAGE="${{ needs.build-and-push.outputs.image }}"
             docker pull "$IMAGE"
             docker rm -f cellapp-prod || true

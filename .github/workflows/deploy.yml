@@ -3,16 +3,19 @@ name: Deploy to Azure VM
 on:
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Deploy to Azure VM
-        uses: appleboy/ssh-action@v1.0.0
+        uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ secrets.AZURE_VM_HOST }}
           username: ${{ secrets.AZURE_VM_USER }}
@@ -23,25 +26,25 @@ jobs:
           passphrase: ""
           script: |
             echo "Starting deployment..."
-            
+
             # Navigate to application directory
             cd /home/pjfm/cellapp
-            
+
             # Pull latest changes
             git pull origin main
-            
+
             # Activate virtual environment
             source venv/bin/activate
-            
+
             # Install/update dependencies
             pip install -r requirements.txt
-            
+
             # Restart the application service
             sudo systemctl restart cellapp
-            
+
             # Check service status
             sudo systemctl status cellapp
-            
+
             echo "Deployment completed successfully!"
 
       - name: Health Check
