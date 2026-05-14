@@ -72,13 +72,25 @@
                                 </div>
                             </div>
                             <div class="attendance-actions">
-                                {% if not attendance.is_upcoming %}
+                                {% if attendance.is_upcoming %}
+                                <div class="btn btn-secondary btn-sm" style="opacity: 0.6; cursor: not-allowed; background: #475569; color: #94a3b8;">
+                                    <i class="fas fa-lock"></i> Available on Meeting Day
+                                </div>
+                                {% elif attendance.can_mark_attendance %}
                                 <a href="{{ url_for('main.attendance_detail', meeting_date=attendance.date) }}" class="btn btn-primary btn-sm">
                                     <i class="fas fa-edit"></i> Mark
                                 </a>
+                                {% elif attendance.attendance_submitted %}
+                                <div class="btn btn-secondary btn-sm" style="opacity: 0.6; cursor: not-allowed; background: #475569; color: #94a3b8;">
+                                    <i class="fas fa-lock"></i> Submitted
+                                </div>
+                                {% elif attendance.locked_reason == 'window_not_open' %}
+                                <div class="btn btn-secondary btn-sm" style="opacity: 0.6; cursor: not-allowed; background: #475569; color: #94a3b8;">
+                                    <i class="fas fa-clock"></i> Opens Tue 5 PM
+                                </div>
                                 {% else %}
                                 <div class="btn btn-secondary btn-sm" style="opacity: 0.6; cursor: not-allowed; background: #475569; color: #94a3b8;">
-                                    <i class="fas fa-lock"></i> Locked
+                                    <i class="fas fa-lock"></i> Closed
                                 </div>
                                 {% endif %}
                             </div>

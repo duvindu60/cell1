@@ -1,0 +1,33 @@
+{# leader_cell_category, tutorial_chip_rows from build_weekly_tutorial_dashboard_rows(tutorials) #}
+<div class="tutorial-lang-chips-wrap">
+    {% if not leader_cell_category %}
+    <p class="tut-lang-hint">Set your cell category (Youth, Young Adult, or Adult) on your <a href="{{ url_for('main.profile') }}" class="tut-lang-hint-link">profile</a> to see tutorials for your cell.</p>
+    {% elif tutorial_chip_rows %}
+    <p class="tut-lang-panel-label"><i class="fas fa-graduation-cap" aria-hidden="true"></i> {{ leader_cell_category }} · PDF &amp; video by language</p>
+    <div class="tut-lang-chips-panel">
+        {% for row in tutorial_chip_rows %}
+        <div class="tut-lang-row">
+            <div class="tut-lang-title">{{ row.heading }}</div>
+            <div class="tut-lang-groups">
+                <div class="tut-lang-group">
+                    <span class="tut-lang-group-label">PDF</span>
+                    <div class="tut-lang-chips">
+                        {% for s in row.slots %}
+                            {% if s.pdf %}<a href="{{ s.pdf }}" target="_blank" rel="noopener noreferrer" class="tut-lang-chip">{{ s.label }}</a>{% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="tut-lang-group">
+                    <span class="tut-lang-group-label">Video</span>
+                    <div class="tut-lang-chips">
+                        {% for s in row.slots %}
+                            {% if s.video %}<a href="{{ s.video }}" target="_blank" rel="noopener noreferrer" class="tut-lang-chip">{{ s.label }}</a>{% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>

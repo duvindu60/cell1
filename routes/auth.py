@@ -100,7 +100,8 @@ def login():
                         'mobile': local10,  # canonical local 10-digit format
                         'name': user_data.get('name', 'User'),
                         'email': user_data.get('email', ''),
-                        'role_id': user_data.get('role_id')
+                        'role_id': user_data.get('role_id'),
+                        'cell_category': user_data.get('cell_category'),
                     }
                     try:
                         from routes.main import ensure_leader_self_member_row

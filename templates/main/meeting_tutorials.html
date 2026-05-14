@@ -23,115 +23,9 @@
             <p>Cell Meeting Tutorials & Guidelines</p>
         {% endif %}
     </div>
-<!-- Tutorials by language (PDF + video per slot), then legacy-only links -->
-{% if tutorial_language_blocks or tutorial_legacy_sections %}
-    {% for block in tutorial_language_blocks %}
-    <div class="tutorial-section-block mb-4 tutorial-lang-block">
-        <h3 class="tutorial-section-heading">
-            <i class="fas fa-language me-2" aria-hidden="true"></i>{{ block.title }}
-        </h3>
-        {% set has_pair = block.pdf and block.video %}
-        {% set col_class = 'col-md-6' if has_pair else 'col-12' %}
-        <div class="row g-4 align-items-stretch">
-            {% if block.pdf %}
-            {% set tutorial = block.pdf %}
-            {% set res_url = (tutorial.file_url or '')|trim %}
-            <div class="{{ col_class }}">
-                {% if res_url|length > 0 %}
-                <a href="{{ res_url }}" target="_blank" rel="noopener noreferrer" class="tutorial-link">
-                {% endif %}
-                <div class="tutorial-card-desktop">
-                    <div class="tutorial-header">
-                        <div class="tutorial-icon tutorial-icon--pdf">
-                            <i class="fas fa-file-pdf"></i>
-                        </div>
-                        <div class="tutorial-info">
-                            <h3>{{ tutorial.tutorial_name or tutorial.title or 'Tutorial' }}</h3>
-                            <p class="tutorial-date">{{ tutorial.meeting_date }}</p>
-                        </div>
-                    </div>
-                    {% if tutorial.description %}
-                    <div class="tutorial-description">
-                        <p>{{ tutorial.description }}</p>
-                    </div>
-                    {% endif %}
-                    <div class="tutorial-footer">
-                        <small class="text-muted">
-                            Uploaded: {% if tutorial.uploaded_at %}{% set ua = tutorial.uploaded_at|string %}{{ ua[:19].replace('T', ' at ') }}{% else %}Recently{% endif %}
-                        </small>
-                    </div>
-                </div>
-                {% if res_url|length > 0 %}
-                </a>
-                {% endif %}
-            </div>
-            {% endif %}
-            {% if block.video %}
-            {% set tutorial = block.video %}
-            <div class="{{ col_class }}">
-                {% if tutorial.youtube_embed_url %}
-                <div class="tutorial-card-desktop tutorial-video-panel">
-                    <div class="tutorial-header">
-                        <div class="tutorial-icon tutorial-icon--video">
-                            <i class="fas fa-play-circle"></i>
-                        </div>
-                        <div class="tutorial-info">
-                            <h3>{{ tutorial.tutorial_name or tutorial.title or 'Tutorial' }}</h3>
-                            <p class="tutorial-date">{{ tutorial.meeting_date }}</p>
-                        </div>
-                    </div>
-                    <div class="ratio ratio-16x9 tutorial-youtube-wrap">
-                        <iframe src="{{ tutorial.youtube_embed_url }}" title="YouTube video" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
-                    </div>
-                    <a href="{{ tutorial.youtube_watch_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-youtube-watch w-100 mt-3">
-                        <i class="fab fa-youtube me-2" aria-hidden="true"></i>Watch on YouTube
-                    </a>
-                    {% if tutorial.description %}
-                    <div class="tutorial-description mt-3">
-                        <p>{{ tutorial.description }}</p>
-                    </div>
-                    {% endif %}
-                    <div class="tutorial-footer">
-                        <small class="text-muted">
-                            Uploaded: {% if tutorial.uploaded_at %}{% set ua = tutorial.uploaded_at|string %}{{ ua[:19].replace('T', ' at ') }}{% else %}Recently{% endif %}
-                        </small>
-                    </div>
-                </div>
-                {% else %}
-                {% set res_url = (tutorial.file_url or '')|trim %}
-                {% if res_url|length > 0 %}
-                <a href="{{ res_url }}" target="_blank" rel="noopener noreferrer" class="tutorial-link">
-                {% endif %}
-                <div class="tutorial-card-desktop">
-                    <div class="tutorial-header">
-                        <div class="tutorial-icon tutorial-icon--video">
-                            <i class="fas fa-play-circle"></i>
-                        </div>
-                        <div class="tutorial-info">
-                            <h3>{{ tutorial.tutorial_name or tutorial.title or 'Tutorial' }}</h3>
-                            <p class="tutorial-date">{{ tutorial.meeting_date }}</p>
-                        </div>
-                    </div>
-                    {% if tutorial.description %}
-                    <div class="tutorial-description">
-                        <p>{{ tutorial.description }}</p>
-                    </div>
-                    {% endif %}
-                    <div class="tutorial-footer">
-                        <small class="text-muted">
-                            Uploaded: {% if tutorial.uploaded_at %}{% set ua = tutorial.uploaded_at|string %}{{ ua[:19].replace('T', ' at ') }}{% else %}Recently{% endif %}
-                        </small>
-                    </div>
-                </div>
-                {% if res_url|length > 0 %}
-                </a>
-                {% endif %}
-                {% endif %}
-            </div>
-            {% endif %}
-        </div>
-    </div>
-    {% endfor %}
+    {% include 'main/_tutorial_meeting_lang_chips.html' %}
+
+{% if tutorial_legacy_sections %}
     {% for section in tutorial_legacy_sections %}
     <div class="tutorial-section-block mb-4">
         <h3 class="tutorial-section-heading">
@@ -185,7 +79,10 @@
         </div>
     </div>
     {% endfor %}
-{% else %}
+{% endif %}
+
+{% if not tutorial_chip_rows and not tutorial_legacy_sections %}
+    {% if leader_cell_category %}
     <div class="feature-card text-center" style="padding: 4rem 2rem;">
         <div class="feature-icon mx-auto mb-4" style="width: 100px; height: 100px; font-size: 40px; background: linear-gradient(135deg, #6c757d, #adb5bd); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
             <i class="fas fa-exclamation-triangle"></i>
@@ -196,6 +93,7 @@
         <p class="text-muted mt-2" style="font-size: 1rem;">This is the next week's meeting date.</p>
         {% endif %}
     </div>
+    {% endif %}
 {% endif %}
 <!-- Back Button -->
 <div class="text-center mt-5">
@@ -243,6 +141,104 @@
 .page-header p {
     color: #8b949e;
     margin: 0;
+}
+
+/* Compact PDF / Video language chips (your cell category) */
+.tutorial-lang-chips-wrap {
+    margin-bottom: 1.25rem;
+}
+.tut-lang-hint {
+    color: #c9d1d9;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    margin: 0 0 1rem 0;
+    padding: 1rem 1.15rem;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 12px;
+}
+.tut-lang-hint-link {
+    color: #58a6ff;
+    font-weight: 600;
+}
+.tut-lang-panel-label {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #8b949e;
+    margin: 0 0 0.65rem 0;
+}
+.tut-lang-panel-label i {
+    color: #58a6ff;
+    font-size: 1rem;
+}
+.tut-lang-chips-panel {
+    background: #21262d;
+    border: 1px solid #30363d;
+    border-radius: 16px;
+    padding: 1rem 1.15rem;
+}
+.tut-lang-row + .tut-lang-row {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #30363d;
+}
+.tut-lang-title {
+    color: #f0f6fc;
+    font-weight: 600;
+    font-size: 1rem;
+    margin-bottom: 0.75rem;
+    line-height: 1.35;
+}
+.tut-lang-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+}
+.tut-lang-group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.45rem 0.65rem;
+}
+.tut-lang-group-label {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #8b949e;
+    min-width: 2.75rem;
+}
+.tut-lang-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+.tut-lang-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    min-height: 2.5rem;
+    border-radius: 999px;
+    background: rgba(31, 111, 235, 0.18);
+    border: 1px solid rgba(88, 166, 255, 0.45);
+    color: #c8e1ff;
+    font-size: 0.92rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+.tut-lang-chip:hover {
+    color: #f0f6fc;
+    background: rgba(31, 111, 235, 0.32);
+}
+
+.page-container .btn-primary.btn-lg {
+    padding: 0.85rem 1.75rem;
+    font-size: 1.05rem;
+    border-radius: 12px;
 }
 
 .tutorial-section-heading {

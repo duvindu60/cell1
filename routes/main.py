@@ -9,6 +9,10 @@ from dotenv import load_dotenv
 from utils.activity_logger import log_activity
 from utils.device_detector import get_template_suffix
 from utils.leaderboard_snapshot_query import query_with_fallback_filters, SNAPSHOT_TABLE_CANDIDATES
+from utils.tutorials_access import (
+    build_weekly_tutorial_dashboard_rows,
+    fetch_leader_cell_category,
+)
 # Load environment variables
 load_dotenv()
 # Supabase configuration
@@ -21,6 +25,9 @@ else:
 
 # PostgREST table for per-meeting visitor counts (Supabase: public.attendance_visitor_counts).
 ATTENDANCE_VISITOR_COUNTS_TABLE = 'attendance_visitor_counts'
+
+# Leader finalized bulk submit for a meeting week (see database/migrations/create_attendance_submissions_table.sql).
+ATTENDANCE_SUBMISSIONS_TABLE = 'attendance_submissions'
 
 
 def ensure_leader_self_member_row(leader_id):
@@ -143,14 +150,14 @@ def _tutorial_resource_url(tutorial):
     if not tutorial or not isinstance(tutorial, dict):
         return ''
     raw = (
-        tutorial.get('pdf_url_1')
-        or tutorial.get('pdf_url_2')
-        or tutorial.get('pdf_url_3')
+        tutorial.get('pdf_url')
+        or tutorial.get('pdf_url_1')
         or tutorial.get('video_url_1')
+        or tutorial.get('pdf_url_2')
         or tutorial.get('video_url_2')
+        or tutorial.get('pdf_url_3')
         or tutorial.get('video_url_3')
         or tutorial.get('file_url')
-        or tutorial.get('pdf_url')
         or tutorial.get('url')
         or tutorial.get('link')
         or tutorial.get('document_url')
@@ -163,14 +170,15 @@ def _tutorial_resource_url(tutorial):
     return str(raw).strip()
 
 
-def load_tutorials_for_meeting_day(meeting_date_formatted, parsed_date):
-    """Rows for that meeting day. Uses exact match first, then a day range for timestamptz/text values."""
-    if not supabase:
+def load_tutorials_for_meeting_day(meeting_date_formatted, parsed_date, cell_category=None):
+    """Rows for that meeting day and leader cell category. Uses exact match first, then a day range."""
+    if not supabase or not cell_category:
         return []
     result = (
         supabase.table('tutorials')
         .select('*')
         .eq('meeting_date', meeting_date_formatted)
+        .eq('cell_category', cell_category)
         .execute()
     )
     rows = result.data or []
@@ -181,6 +189,7 @@ def load_tutorials_for_meeting_day(meeting_date_formatted, parsed_date):
     result2 = (
         supabase.table('tutorials')
         .select('*')
+        .eq('cell_category', cell_category)
         .gte('meeting_date', day_start)
         .lt('meeting_date', day_end)
         .execute()
@@ -195,23 +204,27 @@ def _str_url(val):
 
 
 def _pdf_url_for_slot(row, i):
-    """pdf_url_1..3; for slot 1 also accept legacy `pdf_url` (English) when pdf_url_1 is empty."""
+    """pdf_url slots: 1=Sinhala (pdf_url then pdf_url_1), 2=English, 3=Tamil."""
     if not isinstance(row, dict):
         return ''
-    u = _str_url(row.get(f'pdf_url_{i}'))
-    if i == 1 and not u:
+    if i == 1:
         u = _str_url(row.get('pdf_url'))
-    return u
+        if not u:
+            u = _str_url(row.get('pdf_url_1'))
+        return u
+    return _str_url(row.get(f'pdf_url_{i}'))
 
 
 def _video_url_for_slot(row, i):
-    """video_url_1..3; for slot 1 also accept legacy `video_url` when video_url_1 is empty."""
+    """video_url slots: 1=Sinhala (video_url_1 then video_url), 2=English, 3=Tamil."""
     if not isinstance(row, dict):
         return ''
-    u = _str_url(row.get(f'video_url_{i}'))
-    if i == 1 and not u:
-        u = _str_url(row.get('video_url'))
-    return u
+    if i == 1:
+        u = _str_url(row.get('video_url_1'))
+        if not u:
+            u = _str_url(row.get('video_url'))
+        return u
+    return _str_url(row.get(f'video_url_{i}'))
 
 
 def _classify_tutorial_media(url):
@@ -275,16 +288,17 @@ def youtube_video_id_from_url(url):
 
 
 def build_tutorial_language_blocks(rows):
-    """Pair PDF + video per language: 1=English, 2=Sinhala, 3=Tamil.
+    """Pair PDF + video per language: 1=Sinhala, 2=English, 3=Tamil.
 
-    Slot 1 also uses legacy columns `pdf_url` and `video_url` when `pdf_url_1` / `video_url_1`
-    are empty (common upload shape). Merges first non-empty URL per slot across rows.
+    Slot 1 uses `pdf_url` / `pdf_url_1` and `video_url_1` / `video_url` when primary fields
+    are empty. Merges first non-empty URL per slot across rows.
     """
     labels = {
-        1: 'English tutorials',
-        2: 'Sinhala tutorials',
+        1: 'Sinhala tutorials',
+        2: 'English tutorials',
         3: 'Tamil tutorials',
     }
+    slot_short = {1: 'Sinhala', 2: 'English', 3: 'Tamil'}
     merged_pdf = {1: '', 2: '', 3: ''}
     merged_vid = {1: '', 2: '', 3: ''}
     meta_row = {1: None, 2: None, 3: None}
@@ -316,11 +330,11 @@ def build_tutorial_language_blocks(rows):
 
         pdf_entry = None
         if pdf_u:
-            pdf_entry = _tutorial_display_entry(row, pdf_u, f'PDF {i}', description_fallback=desc_fb)
+            pdf_entry = _tutorial_display_entry(row, pdf_u, slot_short[i], description_fallback=desc_fb)
 
         video_entry = None
         if vid_u:
-            video_entry = _tutorial_display_entry(row, vid_u, f'Video {i}', description_fallback=desc_fb)
+            video_entry = _tutorial_display_entry(row, vid_u, slot_short[i], description_fallback=desc_fb)
             yid = youtube_video_id_from_url(vid_u)
             video_entry['youtube_id'] = yid
             video_entry['youtube_embed_url'] = f'https://www.youtube.com/embed/{yid}' if yid else None
@@ -340,7 +354,7 @@ def build_tutorial_language_blocks(rows):
 def build_tutorial_legacy_sections(rows):
     """Legacy columns only (file_url, pdf_url, …); skips URLs used by language slots.
 
-    Includes slot-1 resolution: pdf_url / video_url count as English when paired with pdf_url_1 / video_url_1.
+    Slot 1 is Sinhala (pdf_url / pdf_url_1, video_url_1 / video_url).
     """
     pdfs, videos, other = [], [], []
     for row in rows or []:
@@ -775,6 +789,180 @@ def can_mark_attendance(meeting_date):
     deadline = get_attendance_deadline(meeting_date)
     return opens <= now <= deadline
 
+
+def _normalize_meeting_date_iso_from_db(meeting_date_val):
+    """Normalize PostgREST date / string to YYYY-MM-DD."""
+    if meeting_date_val is None:
+        return None
+    if hasattr(meeting_date_val, 'isoformat'):
+        return meeting_date_val.isoformat()
+    s = str(meeting_date_val)
+    return s[:10] if len(s) >= 10 else s
+
+
+def fetch_submitted_meeting_dates(leader_id, meeting_dates_iso):
+    """Return set of YYYY-MM-DD strings with a recorded bulk submission for this leader."""
+    if not supabase or not leader_id or not meeting_dates_iso:
+        return set()
+    unique_dates = list({d for d in meeting_dates_iso if d})
+    if not unique_dates:
+        return set()
+    submitted = set()
+    chunk_size = 120
+    try:
+        for i in range(0, len(unique_dates), chunk_size):
+            chunk = unique_dates[i : i + chunk_size]
+            res = (
+                supabase.table(ATTENDANCE_SUBMISSIONS_TABLE)
+                .select('meeting_date')
+                .eq('leader_id', str(leader_id))
+                .in_('meeting_date', chunk)
+                .execute()
+            )
+            for row in res.data or []:
+                iso = _normalize_meeting_date_iso_from_db(row.get('meeting_date'))
+                if iso:
+                    submitted.add(iso)
+    except Exception as e:
+        print(f"fetch_submitted_meeting_dates: {e}")
+        return set()
+    return submitted
+
+
+def attendance_edit_state(parsed_date, submitted_iso_set):
+    """
+    Whether this leader may edit attendance for parsed_date (bulk or per-member),
+    plus UX hints. submitted_iso_set = set of YYYY-MM-DD with finalized bulk submit.
+    """
+    if parsed_date is None:
+        return {
+            'can_mark_attendance': False,
+            'attendance_submitted': False,
+            'locked_reason': None,
+        }
+    today = datetime.now().date()
+    iso = parsed_date.isoformat()
+    is_upcoming = parsed_date > today
+    submitted = iso in submitted_iso_set
+
+    if is_upcoming:
+        return {
+            'can_mark_attendance': False,
+            'attendance_submitted': False,
+            'locked_reason': 'upcoming',
+        }
+    if submitted:
+        return {
+            'can_mark_attendance': False,
+            'attendance_submitted': True,
+            'locked_reason': 'submitted',
+        }
+    if can_mark_attendance(parsed_date):
+        return {
+            'can_mark_attendance': True,
+            'attendance_submitted': False,
+            'locked_reason': None,
+        }
+    now = datetime.now()
+    opens = get_attendance_opening_datetime(parsed_date)
+    if now < opens:
+        locked_reason = 'window_not_open'
+    else:
+        locked_reason = 'window_closed'
+    return {
+        'can_mark_attendance': False,
+        'attendance_submitted': False,
+        'locked_reason': locked_reason,
+    }
+
+
+def leader_can_mark_attendance(leader_id, parsed_date, submitted_iso_set=None):
+    """Leader-specific: time window and not bulk-submitted for this meeting date."""
+    if parsed_date is None:
+        return False
+    if submitted_iso_set is None:
+        submitted_iso_set = fetch_submitted_meeting_dates(leader_id, [parsed_date.isoformat()])
+    state = attendance_edit_state(parsed_date, submitted_iso_set)
+    return state['can_mark_attendance']
+
+
+def attendance_edit_denied_message(parsed_date, submitted_iso_set):
+    """Human-readable reason when edits are not allowed."""
+    state = attendance_edit_state(parsed_date, submitted_iso_set)
+    if state['can_mark_attendance']:
+        return None
+    lr = state['locked_reason']
+    if lr == 'submitted':
+        return (
+            'Attendance has already been submitted for this meeting and cannot be changed.'
+        )
+    if lr == 'upcoming':
+        return 'Attendance opens during the meeting week (Tuesday 5:00 PM through Thursday 11:59 PM).'
+    if lr == 'window_not_open':
+        return 'Attendance opens Tuesday at 5:00 PM.'
+    reminder_info = get_attendance_reminder_info(parsed_date)
+    deadline_str = reminder_info['deadline_str'] if reminder_info else 'Thursday 11:59 PM'
+    return (
+        f'Attendance can only be marked from Tuesday 5:00 PM through {deadline_str}. '
+        f'This week\'s attendance is now closed.'
+    )
+
+
+def record_attendance_week_submitted(leader_id, meeting_date_iso, submitted_by_user_id=None):
+    """Persist finalized bulk submit for this leader + meeting week."""
+    if not supabase or not leader_id or not meeting_date_iso:
+        return False
+    payload = {
+        'leader_id': str(leader_id),
+        'meeting_date': meeting_date_iso,
+        'submitted_at': datetime.now(timezone.utc).isoformat(),
+    }
+    if submitted_by_user_id:
+        payload['submitted_by_user_id'] = str(submitted_by_user_id)
+    try:
+        supabase.table(ATTENDANCE_SUBMISSIONS_TABLE).upsert(
+            payload, on_conflict='leader_id,meeting_date'
+        ).execute()
+        return True
+    except Exception as e:
+        print(f"record_attendance_week_submitted: {e}")
+        traceback.print_exc()
+        return False
+
+
+def enrich_meetings_with_attendance_eligibility(meetings, leader_id):
+    """Add can_mark_attendance, attendance_submitted, locked_reason, calendar_upcoming per meeting row."""
+    if not meetings:
+        return
+    today = datetime.now().date()
+    all_iso = []
+    for m in meetings:
+        do = m.get('date_obj')
+        if do is None and m.get('date_iso'):
+            try:
+                do = datetime.strptime(str(m['date_iso'])[:10], '%Y-%m-%d').date()
+                m['date_obj'] = do
+            except ValueError:
+                pass
+        if do is not None:
+            all_iso.append(do.isoformat())
+        m['calendar_upcoming'] = bool(do and do > today)
+
+    submitted = fetch_submitted_meeting_dates(leader_id, all_iso) if leader_id else set()
+    for m in meetings:
+        do = m.get('date_obj')
+        if do is None:
+            m['can_mark_attendance'] = False
+            m['attendance_submitted'] = False
+            m['locked_reason'] = None
+            m.setdefault('calendar_upcoming', False)
+            continue
+        st = attendance_edit_state(do, submitted)
+        m['can_mark_attendance'] = st['can_mark_attendance']
+        m['attendance_submitted'] = st['attendance_submitted']
+        m['locked_reason'] = st['locked_reason']
+
+
 def get_attendance_reminder_info(meeting_date):
     """
     Get reminder information for attendance deadline.
@@ -852,6 +1040,11 @@ def index():
         # Get leader ID - use user ID directly
         leader_id = get_effective_leader_id()
         leaderboard_stats = get_dashboard_leaderboard_stats(leader_id)
+        leader_cell_category = None
+        try:
+            leader_cell_category = fetch_leader_cell_category(supabase, leader_id)
+        except Exception as wt_err:
+            print(f"Error loading leader cell category: {wt_err}")
 
         next_meeting_date = get_tutorial_meeting_date_corrected()
         current_attendance_date = get_attendance_meeting_date_corrected()
@@ -877,14 +1070,16 @@ def index():
             tutorials_result_data = []
             has_tutorials = False
             try:
-                tutorials_result = (
-                    supabase.table('tutorials')
-                    .select('*')
-                    .eq('meeting_date', next_meeting_date.isoformat())
-                    .execute()
-                )
-                tutorials_result_data = tutorials_result.data or []
-                has_tutorials = len(tutorials_result_data) > 0
+                if leader_cell_category:
+                    tutorials_result = (
+                        supabase.table('tutorials')
+                        .select('*')
+                        .eq('meeting_date', next_meeting_date.isoformat())
+                        .eq('cell_category', leader_cell_category)
+                        .execute()
+                    )
+                    tutorials_result_data = tutorials_result.data or []
+                    has_tutorials = len(tutorials_result_data) > 0
             except Exception as e:
                 print(f"Error checking tutorials: {e}")
                 has_tutorials = False
@@ -923,10 +1118,14 @@ def index():
                     })
                 date_isos = list({s['meeting_date_iso'] for s in parsed_slots})
                 tutorials_by_iso = {}
-                if date_isos:
+                if date_isos and leader_cell_category:
                     try:
                         batch_tr = (
-                            supabase.table('tutorials').select('*').in_('meeting_date', date_isos).execute()
+                            supabase.table('tutorials')
+                            .select('*')
+                            .in_('meeting_date', date_isos)
+                            .eq('cell_category', leader_cell_category)
+                            .execute()
                         )
                         for row in (batch_tr.data or []):
                             nk = _parse_meeting_date_value(row.get('meeting_date'))
@@ -1131,16 +1330,33 @@ def index():
             flash('Error loading dashboard', 'error')
             return redirect(url_for('auth.login'))
     return redirect(url_for('auth.login'))
-@main_bp.route('/profile')
+@main_bp.route('/profile', methods=['GET', 'POST'])
 def profile():
     if 'user' not in session:
         return redirect(url_for('auth.login'))
     r = redirect_deputy_to_attendance()
     if r:
         return r
-    # Get leader ID from session
     leader_id = get_effective_leader_id()
-    
+
+    if request.method == 'POST':
+        if session.get('user', {}).get('is_deputy'):
+            flash('Only the cell leader can update cell category.', 'error')
+            return redirect(url_for('main.profile'))
+        cat = (request.form.get('cell_category') or '').strip()
+        allowed = {'youth', 'young adult', 'adult'}
+        if cat not in allowed:
+            flash('Please choose a valid cell category.', 'error')
+            return redirect(url_for('main.profile'))
+        try:
+            supabase.table('users').update({'cell_category': cat}).eq('id', leader_id).execute()
+            session['user']['cell_category'] = cat
+            flash('Cell category saved.', 'success')
+        except Exception as e:
+            print(f"Error updating cell_category: {e}")
+            flash('Could not save cell category.', 'error')
+        return redirect(url_for('main.profile'))
+
     # Create a copy of user data to add calculated fields
     user_data = dict(session['user'])
     
@@ -1157,6 +1373,7 @@ def profile():
         if user_row.data and len(user_row.data) > 0:
             row = user_row.data[0]
             user_data['age'] = row.get('age')
+            user_data['cell_category'] = row.get('cell_category')
             user_data['zone'] = row.get('zone_name') or row.get('zone')
             # Branch: resolve branch_id to branch name (branches table lookup)
             branch_id = row.get('branch_id')
@@ -1390,9 +1607,11 @@ def meeting_dates():
                     meetings.append({
                         'date': date_str,
                         'date_iso': parsed_date.isoformat(),
+                        'date_obj': parsed_date,
                         'meeting_type': 'Cell Meeting',
                         'description': '',
-                        'id': None
+                        'id': None,
+                        'is_upcoming': False,
                     })
                 except Exception as e:
                     print(f"Error parsing fallback date: {e}")
@@ -1408,7 +1627,9 @@ def meeting_dates():
             # Mark others as recent
             for meeting in meetings[1:]:
                 meeting['is_upcoming'] = False
-        
+
+        enrich_meetings_with_attendance_eligibility(meetings, leader_id)
+
         print(f"DEBUG: Final meetings count: {len(meetings)}")
         for i, meeting in enumerate(meetings, 1):
             status = "UPCOMING" if meeting.get('is_upcoming') else "RECENT"
@@ -1451,7 +1672,9 @@ def meeting_dates():
             # Mark others as recent
             for meeting in meetings[1:]:
                 meeting['is_upcoming'] = False
-        
+
+        enrich_meetings_with_attendance_eligibility(meetings, leader_id)
+
         template_name = f'main/meeting_dates{get_template_suffix()}.html'
         return render_template(template_name, 
                              user=session['user'],
@@ -1572,12 +1795,12 @@ def attendance_detail(meeting_date):
                         'marked_by_label': 'Leader'
                     }
         
-        # Check if attendance can be marked for this meeting date
-        # ALL attendance is locked after Thursday 23:59:59
+        # Leader-specific: marking window + not bulk-submitted for this week
         can_mark = False
         reminder_info = None
         if parsed_date:
-            can_mark = can_mark_attendance(parsed_date)
+            submitted_iso_set = fetch_submitted_meeting_dates(leader_id, [parsed_date.isoformat()])
+            can_mark = leader_can_mark_attendance(leader_id, parsed_date, submitted_iso_set)
             reminder_info = get_attendance_reminder_info(parsed_date)
 
         meeting_date_iso = parsed_date.isoformat() if parsed_date else None
@@ -1651,16 +1874,11 @@ def update_attendance(meeting_date):
             except ValueError:
                 parsed_date = None
         
-        # Check if attendance can be marked for this meeting date
-        # ALL attendance is locked after Thursday 23:59:59
         if parsed_date:
-            if not can_mark_attendance(parsed_date):
-                reminder_info = get_attendance_reminder_info(parsed_date)
-                deadline_str = reminder_info['deadline_str'] if reminder_info else 'Thursday 11:59 PM'
-                return jsonify({
-                    'success': False, 
-                    'message': f'Attendance can only be marked from Tuesday 5:00 PM through {deadline_str}. This week\'s attendance is now closed.'
-                }), 403
+            submitted_iso_set = fetch_submitted_meeting_dates(leader_id, [parsed_date.isoformat()])
+            if not leader_can_mark_attendance(leader_id, parsed_date, submitted_iso_set):
+                msg = attendance_edit_denied_message(parsed_date, submitted_iso_set)
+                return jsonify({'success': False, 'message': msg or 'Attendance cannot be updated.'}), 403
         
         # Get member info and validate it was created on or before meeting date
         try:
@@ -1828,16 +2046,12 @@ def bulk_update_attendance(meeting_date):
             except ValueError:
                 parsed_date = None
         
-        # Check if attendance can be marked for this meeting date
-        # ALL attendance is locked after Thursday 23:59:59
+        # Leader-specific: marking window + not already bulk-submitted
         if parsed_date:
-            if not can_mark_attendance(parsed_date):
-                reminder_info = get_attendance_reminder_info(parsed_date)
-                deadline_str = reminder_info['deadline_str'] if reminder_info else 'Thursday 11:59 PM'
-                return jsonify({
-                    'success': False, 
-                    'message': f'Attendance can only be marked from Tuesday 5:00 PM through {deadline_str}. This week\'s attendance is now closed.'
-                }), 403
+            submitted_iso_set = fetch_submitted_meeting_dates(leader_id, [parsed_date.isoformat()])
+            if not leader_can_mark_attendance(leader_id, parsed_date, submitted_iso_set):
+                msg = attendance_edit_denied_message(parsed_date, submitted_iso_set)
+                return jsonify({'success': False, 'message': msg or 'Attendance cannot be updated.'}), 403
         
         # Get meeting_number from meetings table
         meeting_number = None
@@ -1944,6 +2158,21 @@ def bulk_update_attendance(meeting_date):
             )
         except Exception as log_error:
             print(f"Error logging activity: {log_error}")
+
+        # Finalize this meeting week after a successful bulk submit (locks further edits)
+        if error_count == 0 and success_count > 0 and meeting_date_formatted:
+            if not record_attendance_week_submitted(
+                leader_id,
+                meeting_date_formatted,
+                session['user'].get('id'),
+            ):
+                return jsonify({
+                    'success': False,
+                    'message': (
+                        'Attendance was saved but this week could not be finalized (submission lock). '
+                        'Apply the attendance_submissions migration in Supabase, then submit again.'
+                    ),
+                }), 500
         
         if error_count == 0:
             return jsonify({'success': True, 'message': f'Successfully updated attendance for {success_count} members'})
@@ -2004,13 +2233,10 @@ def update_visitor_attendance(meeting_date):
                 parsed_date = None
 
         if parsed_date:
-            if not can_mark_attendance(parsed_date):
-                reminder_info = get_attendance_reminder_info(parsed_date)
-                deadline_str = reminder_info['deadline_str'] if reminder_info else 'Thursday 11:59 PM'
-                return jsonify({
-                    'success': False,
-                    'message': f'Attendance can only be marked from Tuesday 5:00 PM through {deadline_str}. This week\'s attendance is now closed.'
-                }), 403
+            submitted_iso_set = fetch_submitted_meeting_dates(leader_uid, [parsed_date.isoformat()])
+            if not leader_can_mark_attendance(leader_uid, parsed_date, submitted_iso_set):
+                msg = attendance_edit_denied_message(parsed_date, submitted_iso_set)
+                return jsonify({'success': False, 'message': msg or 'Attendance cannot be updated.'}), 403
 
         meeting_number = None
         meeting_row_id = None
@@ -2643,9 +2869,10 @@ def meeting_tutorials(meeting_date):
                 parsed_date = alt
                 meeting_date_formatted = alt.isoformat()
 
-        # Note: tutorials table doesn't have leader_id column, so we query by meeting_date only
-        tutorials = load_tutorials_for_meeting_day(meeting_date_formatted, parsed_date)
-        tutorial_language_blocks = build_tutorial_language_blocks(tutorials)
+        # Note: tutorials filtered by leader's users.cell_category
+        leader_cat = fetch_leader_cell_category(supabase, leader_id)
+        tutorials = load_tutorials_for_meeting_day(meeting_date_formatted, parsed_date, cell_category=leader_cat)
+        tutorial_chip_rows = build_weekly_tutorial_dashboard_rows(tutorials)
         tutorial_legacy_sections = build_tutorial_legacy_sections(tutorials)
 
         # Check if this is the next meeting date (use corrected tutorial logic)
@@ -2665,8 +2892,9 @@ def meeting_tutorials(meeting_date):
             user=session['user'],
             meeting_date=meeting_date,
             tutorials=tutorials,
-            tutorial_language_blocks=tutorial_language_blocks,
+            tutorial_chip_rows=tutorial_chip_rows,
             tutorial_legacy_sections=tutorial_legacy_sections,
+            leader_cell_category=leader_cat,
             is_next_week=is_next_week,
             is_latest=False,
             no_tutorial_uploaded=len(tutorials) == 0,
@@ -2748,7 +2976,7 @@ def tutorials_list():
         # Get leader ID - use user ID directly
         leader_id = get_effective_leader_id()
         
-        # Get tutorial list from meetings table
+        leader_cat = fetch_leader_cell_category(supabase, leader_id)
         tutorial_list = []
         try:
             # Get user's created date to filter meetings
@@ -2796,20 +3024,24 @@ def tutorials_list():
                     
                     meeting_date_iso = parsed_date.isoformat()
                     
-                    # Check for tutorial for this meeting date
-                    tutorial_result = supabase.table('tutorials')\
-                        .select('*')\
-                        .eq('meeting_date', meeting_date_iso)\
-                        .execute()
-                    
-                    has_tutorial = len(tutorial_result.data) > 0 if tutorial_result.data else False
+                    has_tutorial = False
                     is_placeholder_tutorial = False
                     tutorial_record = None
-                    
-                    if has_tutorial and tutorial_result.data:
-                        tutorial_record = tutorial_result.data[0]
-                        # Check if it's a placeholder (check title field instead of tutorial_name)
-                        is_placeholder_tutorial = tutorial_record.get('title') == 'No Tutorial Uploaded' or tutorial_record.get('title') == ''
+                    if leader_cat:
+                        tutorial_result = (
+                            supabase.table('tutorials')
+                            .select('*')
+                            .eq('meeting_date', meeting_date_iso)
+                            .eq('cell_category', leader_cat)
+                            .execute()
+                        )
+                        has_tutorial = len(tutorial_result.data) > 0 if tutorial_result.data else False
+                        if has_tutorial and tutorial_result.data:
+                            tutorial_record = tutorial_result.data[0]
+                            is_placeholder_tutorial = (
+                                tutorial_record.get('title') == 'No Tutorial Uploaded'
+                                or tutorial_record.get('title') == ''
+                            )
                     
                     # Determine if this is upcoming or past
                     is_upcoming = parsed_date > today
@@ -2989,6 +3221,25 @@ def attendance_list():
         # Sort: unmarked by date (most recent first), marked by date (most recent first)
         unmarked_list.sort(key=lambda x: x.get('date_obj', datetime.now().date()), reverse=True)
         marked_list.sort(key=lambda x: x.get('date_obj', datetime.now().date()), reverse=True)
+
+        all_iso = []
+        for item in unmarked_list:
+            if item.get('date_iso'):
+                all_iso.append(item['date_iso'])
+        for item in marked_list:
+            if item.get('date_iso'):
+                all_iso.append(item['date_iso'])
+        submitted_iso_set = fetch_submitted_meeting_dates(leader_id, all_iso)
+        for item in unmarked_list:
+            st = attendance_edit_state(item['date_obj'], submitted_iso_set)
+            item['can_mark_attendance'] = st['can_mark_attendance']
+            item['attendance_submitted'] = st['attendance_submitted']
+            item['locked_reason'] = st['locked_reason']
+        for item in marked_list:
+            st = attendance_edit_state(item['date_obj'], submitted_iso_set)
+            item['can_mark_attendance'] = st['can_mark_attendance']
+            item['attendance_submitted'] = st['attendance_submitted']
+            item['locked_reason'] = st['locked_reason']
         
         # Calculate pagination for marked list
         total_marked = len(marked_list)

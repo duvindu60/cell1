@@ -781,6 +781,15 @@ body {
                                                 </svg>
                                                 <span>Tutorials</span>
                                             </a>
+                                            {% if meeting.calendar_upcoming %}
+                                            <span class="action-btn secondary" style="opacity: 0.55; cursor: not-allowed; border-style: dashed;" title="Attendance opens during the meeting week">
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                    <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                    <path d="M12 8V12L14.5 14.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                </svg>
+                                                <span>Opens meeting week</span>
+                                            </span>
+                                            {% elif meeting.can_mark_attendance %}
                                             <a href="{{ url_for('main.attendance_detail', meeting_date=meeting.date) }}" class="action-btn secondary">
                                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                                                     <path d="M20 21V19C20 17.9391 19.5786 16.9217 18.8284 16.1716C18.0783 15.4214 17.0609 15 16 15H8C6.93913 15 5.92172 15.4214 5.17157 16.1716C4.42143 16.9217 4 17.9391 4 19V21" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -788,6 +797,31 @@ body {
                                                 </svg>
                                                 <span>Attendance</span>
                                             </a>
+                                            {% elif meeting.attendance_submitted %}
+                                            <span class="action-btn secondary" style="opacity: 0.55; cursor: not-allowed;" title="Attendance submitted">
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                    <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" stroke-width="1.5"/>
+                                                    <path d="M8 12H16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                                </svg>
+                                                <span>Submitted</span>
+                                            </span>
+                                            {% elif meeting.locked_reason == 'window_not_open' %}
+                                            <span class="action-btn secondary" style="opacity: 0.55; cursor: not-allowed;" title="Opens Tuesday 5 PM">
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                    <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" stroke-width="1.5"/>
+                                                    <path d="M12 8V12L14.5 14.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                                </svg>
+                                                <span>Opens Tue 5 PM</span>
+                                            </span>
+                                            {% else %}
+                                            <span class="action-btn secondary" style="opacity: 0.55; cursor: not-allowed;" title="Attendance closed">
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                    <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" stroke-width="1.5"/>
+                                                    <path d="M8 12H16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                                </svg>
+                                                <span>Closed</span>
+                                            </span>
+                                            {% endif %}
                                         </div>
                                     </div>
                                 </div>
@@ -836,6 +870,15 @@ body {
                                             </svg>
                                             <span>Tutorials</span>
                                         </a>
+                                        {% if meeting.calendar_upcoming %}
+                                        <span class="action-btn secondary" style="opacity: 0.55; cursor: not-allowed; border-style: dashed;" title="Attendance opens during the meeting week">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                <path d="M12 8V12L14.5 14.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                            </svg>
+                                            <span>Opens meeting week</span>
+                                        </span>
+                                        {% elif meeting.can_mark_attendance %}
                                         <a href="{{ url_for('main.attendance_detail', meeting_date=meeting.date) }}" class="action-btn secondary">
                                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                                                 <path d="M20 21V19C20 17.9391 19.5786 16.9217 18.8284 16.1716C18.0783 15.4214 17.0609 15 16 15H8C6.93913 15 5.92172 15.4214 5.17157 16.1716C4.42143 16.9217 4 17.9391 4 19V21" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -843,6 +886,31 @@ body {
                                             </svg>
                                             <span>Attendance</span>
                                         </a>
+                                        {% elif meeting.attendance_submitted %}
+                                        <span class="action-btn secondary" style="opacity: 0.55; cursor: not-allowed;" title="Attendance submitted">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" stroke-width="1.5"/>
+                                                <path d="M8 12H16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                            </svg>
+                                            <span>Submitted</span>
+                                        </span>
+                                        {% elif meeting.locked_reason == 'window_not_open' %}
+                                        <span class="action-btn secondary" style="opacity: 0.55; cursor: not-allowed;" title="Opens Tuesday 5 PM">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" stroke-width="1.5"/>
+                                                <path d="M12 8V12L14.5 14.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                            </svg>
+                                            <span>Opens Tue 5 PM</span>
+                                        </span>
+                                        {% else %}
+                                        <span class="action-btn secondary" style="opacity: 0.55; cursor: not-allowed;" title="Attendance closed">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" stroke-width="1.5"/>
+                                                <path d="M8 12H16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                            </svg>
+                                            <span>Closed</span>
+                                        </span>
+                                        {% endif %}
                                     </div>
                                 </div>
                             </div>

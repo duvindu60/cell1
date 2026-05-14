@@ -12,6 +12,7 @@ from utils.leaderboard_snapshot_query import (
     query_with_fallback_filters,
     SNAPSHOT_TABLE_CANDIDATES,
 )
+from utils.tutorials_access import fetch_tutorials_for_my_cell
 
 load_dotenv()
 
@@ -517,3 +518,53 @@ def leaderboard_tasks_patch():
             continue
 
     return jsonify({'success': False, 'message': f'Unable to update task progress: {last_error or "No task table found"}'}), 500
+
+
+def _effective_leader_id():
+    user = session.get('user') or {}
+    if user.get('is_deputy'):
+        return user.get('leader_id')
+    return user.get('id')
+
+
+@api_bp.route('/tutorials/for-my-cell')
+@login_required
+def tutorials_for_my_cell():
+    if not supabase:
+        return jsonify({'success': False, 'message': 'Supabase client is not configured'}), 500
+
+    lid = _effective_leader_id()
+    result = fetch_tutorials_for_my_cell(supabase, lid)
+    return jsonify({
+        'success': True,
+        'cell_category': result['cell_category'],
+        'data': result['data'],
+    })
+
+
+@api_bp.route('/tutorials')
+@login_required
+def tutorials_by_category():
+    """Optional: GET /api/tutorials?cell_category=youth — must match tutorials.cell_category exactly."""
+    if not supabase:
+        return jsonify({'success': False, 'message': 'Supabase client is not configured'}), 500
+    cat = (request.args.get('cell_category') or '').strip()
+    if not cat:
+        lid = _effective_leader_id()
+        result = fetch_tutorials_for_my_cell(supabase, lid)
+        return jsonify({
+            'success': True,
+            'cell_category': result['cell_category'],
+            'data': result['data'],
+        })
+    try:
+        res = (
+            supabase.table('tutorials')
+            .select('*')
+            .eq('cell_category', cat)
+            .order('meeting_date', desc=True)
+            .execute()
+        )
+        return jsonify({'success': True, 'cell_category': cat, 'data': res.data or []})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500

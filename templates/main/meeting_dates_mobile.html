@@ -35,9 +35,19 @@
                                 <a href="{{ url_for('main.meeting_tutorials', meeting_date=meeting.date) }}" class="btn-custom-primary" title="View Tutorials">
                                     <i class="fas fa-book"></i>
                                 </a>
+                                {% if meeting.calendar_upcoming %}
+                                <span class="btn-custom-success" style="opacity: 0.55; cursor: not-allowed;" title="Attendance opens during the meeting week"><i class="fas fa-clock"></i></span>
+                                {% elif meeting.can_mark_attendance %}
                                 <a href="{{ url_for('main.attendance_detail', meeting_date=meeting.date) }}" class="btn-custom-success" title="Mark Attendance">
                                     <i class="fas fa-user-check"></i>
                                 </a>
+                                {% elif meeting.attendance_submitted %}
+                                <span class="btn-custom-success" style="opacity: 0.55; cursor: not-allowed;" title="Attendance submitted"><i class="fas fa-lock"></i></span>
+                                {% elif meeting.locked_reason == 'window_not_open' %}
+                                <span class="btn-custom-success" style="opacity: 0.55; cursor: not-allowed;" title="Opens Tuesday 5 PM"><i class="fas fa-clock"></i></span>
+                                {% else %}
+                                <span class="btn-custom-success" style="opacity: 0.55; cursor: not-allowed;" title="Attendance closed"><i class="fas fa-lock"></i></span>
+                                {% endif %}
                             </div>
                         </div>
                     </div>
@@ -91,9 +101,19 @@
                                     <a href="{{ url_for('main.meeting_tutorials', meeting_date=meeting.date) }}" class="btn-custom-primary" title="View Tutorials">
                                         <i class="fas fa-book"></i>
                                     </a>
+                                    {% if meeting.calendar_upcoming %}
+                                    <span class="btn-custom-success" style="opacity: 0.55; cursor: not-allowed;" title="Opens meeting week"><i class="fas fa-clock"></i></span>
+                                    {% elif meeting.can_mark_attendance %}
                                     <a href="{{ url_for('main.attendance_detail', meeting_date=meeting.date) }}" class="btn-custom-success" title="Mark Attendance">
                                         <i class="fas fa-user-check"></i>
                                     </a>
+                                    {% elif meeting.attendance_submitted %}
+                                    <span class="btn-custom-success" style="opacity: 0.55; cursor: not-allowed;" title="Submitted"><i class="fas fa-lock"></i></span>
+                                    {% elif meeting.locked_reason == 'window_not_open' %}
+                                    <span class="btn-custom-success" style="opacity: 0.55; cursor: not-allowed;" title="Opens Tuesday 5 PM"><i class="fas fa-clock"></i></span>
+                                    {% else %}
+                                    <span class="btn-custom-success" style="opacity: 0.55; cursor: not-allowed;" title="Attendance closed"><i class="fas fa-lock"></i></span>
+                                    {% endif %}
                                 </div>
                             </div>
                             {% endfor %}

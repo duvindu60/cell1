@@ -113,6 +113,36 @@
                         <span class="info-value">{{ user.current_role or 'Cell Member' }}</span>
                     </div>
                 </div>
+                {% if not user.is_deputy %}
+                <div class="info-item cell-category-item">
+                    <div class="info-icon">
+                        <i class="fas fa-layer-group"></i>
+                    </div>
+                    <div class="info-content info-content--stacked">
+                        <span class="info-label">CELL CATEGORY (TUTORIALS)</span>
+                        <form method="post" action="{{ url_for('main.profile') }}" class="cell-category-form">
+                            <select name="cell_category" class="cell-category-select" aria-label="Cell category">
+                                <option value="" {% if not user.cell_category %}selected{% endif %}>Select category…</option>
+                                <option value="youth" {% if user.cell_category == 'youth' %}selected{% endif %}>Youth</option>
+                                <option value="young adult" {% if user.cell_category == 'young adult' %}selected{% endif %}>Young Adult</option>
+                                <option value="adult" {% if user.cell_category == 'adult' %}selected{% endif %}>Adult</option>
+                            </select>
+                            <button type="submit" class="cell-category-save">Save</button>
+                        </form>
+                        <span class="info-hint">Matches tutorial content for your cell group.</span>
+                    </div>
+                </div>
+                {% else %}
+                <div class="info-item">
+                    <div class="info-icon">
+                        <i class="fas fa-layer-group"></i>
+                    </div>
+                    <div class="info-content">
+                        <span class="info-label">CELL CATEGORY (LEADER)</span>
+                        <span class="info-value">{{ user.cell_category or 'Not set' }}</span>
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
 
@@ -445,6 +475,45 @@
     font-weight: 500;
     overflow-wrap: anywhere;
     word-break: break-word;
+}
+
+.info-content--stacked .info-hint {
+    font-size: 0.8rem;
+    color: #94a3b8;
+    margin-top: 0.5rem;
+}
+
+.cell-category-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.65rem;
+    margin-top: 0.35rem;
+}
+
+.cell-category-select {
+    flex: 1 1 180px;
+    min-width: 0;
+    padding: 0.5rem 0.75rem;
+    border-radius: 8px;
+    border: 1px solid #64748b;
+    background: #0f172a;
+    color: white;
+    font-size: 0.95rem;
+}
+
+.cell-category-save {
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    border: none;
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.cell-category-save:hover {
+    filter: brightness(1.08);
 }
 
 /* Action Grid */
