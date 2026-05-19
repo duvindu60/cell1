@@ -1,4 +1,4 @@
-from flask import Flask, session, request, g
+from flask import Flask, session, request, g, redirect, url_for
 from routes.auth import auth_bp
 from routes.main import main_bp
 from routes.api import api_bp
@@ -25,6 +25,21 @@ def create_app(config_name=None):
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
     app.register_blueprint(api_bp)
+
+    @app.before_request
+    def require_password_set_before_app_use():
+        """Block app routes until leader sets their own password after admin-approved reset."""
+        if not session.get('must_set_password'):
+            return None
+        allowed = {
+            'auth.set_password',
+            'auth.logout',
+            'static',
+            'chrome_devtools_probe',
+        }
+        if request.endpoint in allowed:
+            return None
+        return redirect(url_for('auth.set_password'))
 
     @app.route('/.well-known/appspecific/com.chrome.devtools.json')
     def chrome_devtools_probe():
