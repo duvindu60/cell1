@@ -908,6 +908,59 @@ def attendance_edit_denied_message(parsed_date, submitted_iso_set):
     )
 
 
+def get_attendance_eligible_member_id_strings(leader_id, parsed_date, meeting_date_formatted):
+    """
+    Member id strings that must be included in a bulk attendance submit
+    (same scope as attendance_detail member list).
+    """
+    if not supabase or not leader_id or not meeting_date_formatted:
+        return set()
+    query = supabase.table('cell_members').select('*').eq('leader_id', leader_id)
+    if parsed_date:
+        query = query.lte('created_at', meeting_date_formatted)
+    members_result = query.execute()
+    members = members_result.data if members_result.data else []
+    if parsed_date and members:
+        filtered_members = []
+        for member in members:
+            member_created_at = member.get('created_at')
+            if member_created_at:
+                try:
+                    if isinstance(member_created_at, str):
+                        try:
+                            member_created = datetime.fromisoformat(
+                                member_created_at.replace('Z', '+00:00')
+                            ).date()
+                        except ValueError:
+                            try:
+                                member_created = datetime.strptime(
+                                    member_created_at, '%Y-%m-%dT%H:%M:%S.%f'
+                                ).date()
+                            except ValueError:
+                                member_created = datetime.strptime(
+                                    member_created_at.split('T')[0], '%Y-%m-%d'
+                                ).date()
+                    else:
+                        member_created = (
+                            member_created_at.date()
+                            if hasattr(member_created_at, 'date')
+                            else member_created_at
+                        )
+                    if member_created <= parsed_date:
+                        filtered_members.append(member)
+                except Exception:
+                    filtered_members.append(member)
+            else:
+                filtered_members.append(member)
+        members = filtered_members
+    out = set()
+    for m in members:
+        mid = m.get('id')
+        if mid is not None:
+            out.add(str(mid))
+    return out
+
+
 def record_attendance_week_submitted(leader_id, meeting_date_iso, submitted_by_user_id=None):
     """Persist finalized bulk submit for this leader + meeting week."""
     if not supabase or not leader_id or not meeting_date_iso:
@@ -1798,10 +1851,32 @@ def attendance_detail(meeting_date):
         # Leader-specific: marking window + not bulk-submitted for this week
         can_mark = False
         reminder_info = None
+        attendance_submitted = False
+        locked_reason = None
+        attendance_locked_message = None
         if parsed_date:
             submitted_iso_set = fetch_submitted_meeting_dates(leader_id, [parsed_date.isoformat()])
-            can_mark = leader_can_mark_attendance(leader_id, parsed_date, submitted_iso_set)
+            edit_state = attendance_edit_state(parsed_date, submitted_iso_set)
+            can_mark = edit_state['can_mark_attendance']
+            attendance_submitted = edit_state['attendance_submitted']
+            locked_reason = edit_state['locked_reason']
+            if not can_mark and not attendance_submitted:
+                attendance_locked_message = attendance_edit_denied_message(
+                    parsed_date, submitted_iso_set
+                )
             reminder_info = get_attendance_reminder_info(parsed_date)
+
+        attendance_present_count = 0
+        attendance_absent_count = 0
+        attendance_pending_count = 0
+        for m in members:
+            ad = attendance_data.get(m['id']) or {}
+            if ad.get('present'):
+                attendance_present_count += 1
+            elif ad.get('absent'):
+                attendance_absent_count += 1
+            else:
+                attendance_pending_count += 1
 
         meeting_date_iso = parsed_date.isoformat() if parsed_date else None
         visitor_attendance = None
@@ -1826,6 +1901,13 @@ def attendance_detail(meeting_date):
                             visitor_saved_time_label = None
             except Exception as ve:
                 print(f"visitor_attendance fetch skipped: {ve}")
+
+        visitor_count_total = 0
+        if visitor_attendance:
+            try:
+                visitor_count_total = int(visitor_attendance.get('visitor_count') or 0)
+            except (TypeError, ValueError):
+                visitor_count_total = 0
         
         template_name = f'main/attendance_detail{get_template_suffix()}.html'
         return render_template(template_name, 
@@ -1835,6 +1917,13 @@ def attendance_detail(meeting_date):
                              members=members,
                              attendance_data=attendance_data,
                              can_mark_attendance=can_mark,
+                             attendance_submitted=attendance_submitted,
+                             locked_reason=locked_reason,
+                             attendance_locked_message=attendance_locked_message,
+                             attendance_present_count=attendance_present_count,
+                             attendance_absent_count=attendance_absent_count,
+                             attendance_pending_count=attendance_pending_count,
+                             visitor_count_total=visitor_count_total,
                              reminder_info=reminder_info,
                              leader_id=leader_id,
                              visitor_attendance=visitor_attendance,
@@ -2064,20 +2153,43 @@ def bulk_update_attendance(meeting_date):
         
         if meeting_number is None:
             return jsonify({'success': False, 'message': 'Meeting not found. Cannot mark attendance.'}), 400
-        
-        # Process each attendance record
+
+        expected_ids = get_attendance_eligible_member_id_strings(
+            leader_id, parsed_date, meeting_date_formatted
+        )
+        if not expected_ids:
+            return jsonify({'success': False, 'message': 'No members to mark for this meeting.'}), 400
+
+        payload_by_id = {}
+        for attendance_item in attendance_list:
+            member_id = attendance_item.get('member_id')
+            status = attendance_item.get('status')
+            if not member_id or status not in ('present', 'absent'):
+                return jsonify({
+                    'success': False,
+                    'message': 'Each entry must include member_id and status present or absent.',
+                }), 400
+            sid = str(member_id)
+            if sid in payload_by_id:
+                return jsonify({
+                    'success': False,
+                    'message': 'Duplicate member entries in attendance data.',
+                }), 400
+            payload_by_id[sid] = status
+
+        if set(payload_by_id.keys()) != expected_ids:
+            return jsonify({
+                'success': False,
+                'message': 'Mark every member as present or absent before submitting.',
+            }), 400
+
+        # Process each attendance record (validated set matches eligible members)
         success_count = 0
         error_count = 0
         errors = []
-        
-        for attendance_item in attendance_list:
-            member_id = attendance_item.get('member_id')
-            status = attendance_item.get('status')  # 'present' or 'absent'
-            
-            if not member_id or not status:
-                error_count += 1
-                continue
-            
+
+        for member_id, status in payload_by_id.items():
+
             # Validate member was created on or before meeting date
             if parsed_date:
                 try:

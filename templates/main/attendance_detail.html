@@ -4,7 +4,7 @@
 
 {% block mobile_content %}
 <!-- MOBILE ATTENDANCE UI -->
-<div class="mobile-attendance-container">
+<div class="mobile-attendance-container"{% if attendance_submitted %} data-attendance-submitted="1"{% endif %}>
     <!-- Mobile Header -->
     <div class="mobile-header">
         <div class="d-flex justify-content-between align-items-center">
@@ -24,21 +24,21 @@
             <div class="col-3">
                 <div class="stat-card present">
                     <div class="stat-icon">✅</div>
-                    <div class="stat-number" id="presentCount-mobile">0</div>
+                    <div class="stat-number" id="presentCount-mobile">{% if attendance_submitted %}{{ attendance_present_count }}{% else %}0{% endif %}</div>
                     <div class="stat-label">Present</div>
                 </div>
             </div>
             <div class="col-3">
                 <div class="stat-card absent">
                     <div class="stat-icon">❌</div>
-                    <div class="stat-number" id="absentCount-mobile">0</div>
+                    <div class="stat-number" id="absentCount-mobile">{% if attendance_submitted %}{{ attendance_absent_count }}{% else %}0{% endif %}</div>
                     <div class="stat-label">Absent</div>
                 </div>
             </div>
             <div class="col-3">
                 <div class="stat-card pending">
                     <div class="stat-icon">⏳</div>
-                    <div class="stat-number" id="pendingCount-mobile">0</div>
+                    <div class="stat-number" id="pendingCount-mobile">{% if attendance_submitted %}{{ attendance_pending_count }}{% else %}0{% endif %}</div>
                     <div class="stat-label">Pending</div>
                 </div>
             </div>
@@ -51,6 +51,24 @@
             </div>
         </div>
     </div>
+
+    {% if attendance_submitted %}
+    <div class="submitted-results-banner submitted-results-banner-mobile mb-3 mx-2">
+        <div class="submitted-results-inner d-flex align-items-start gap-3">
+            <i class="fas fa-circle-check submitted-check-icon" style="font-size:1.75rem;color:#6ee7b7;"></i>
+            <div class="text-start">
+                <h5 class="text-white fw-bold mb-1">Attendance submitted</h5>
+                <p class="mb-2 small text-white-50">Totals for this meeting are saved and cannot be changed.</p>
+                <div class="small text-white" style="opacity:.95;">
+                    <strong>{{ attendance_present_count }}</strong> present ·
+                    <strong>{{ attendance_absent_count }}</strong> absent
+                    {% if attendance_pending_count > 0 %}· <strong>{{ attendance_pending_count }}</strong> not marked{% endif %}
+                    · <strong>{{ visitor_count_total }}</strong> visitors
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
     
     <!-- Mobile Members List -->
     <div class="mobile-members-section">
@@ -58,7 +76,7 @@
         {% if members %}
             <div class="mobile-members-list">
                 {% for member in members %}
-                <div class="mobile-member-card {% if attendance_data[member.id].present %}status-present{% elif attendance_data[member.id].absent %}status-absent{% else %}status-pending{% endif %}" data-member-id="{{ member.id }}">
+                <div class="mobile-member-card {% if attendance_data[member.id].present %}status-present{% elif attendance_data[member.id].absent %}status-absent{% else %}status-pending{% endif %}" data-member-id="{{ member.id }}" data-attendance-choice="{% if attendance_data[member.id].present %}present{% elif attendance_data[member.id].absent %}absent{% else %}unset{% endif %}">
                     <div class="member-info">
                         <div class="member-avatar-mobile">
                             <span class="avatar-text">{{ member.name[0].upper() }}</span>
@@ -85,20 +103,16 @@
                             <button type="button" 
                                     class="action-btn present-btn-mobile {% if attendance_data[member.id].present %}active{% endif %}"
                                     data-member-id="{{ member.id }}"
-                                    onclick="updateAttendanceMobile('{{ member.id }}', 'present', '{{ meeting_date }}')">
+                                    {% if not can_mark_attendance %}disabled style="opacity: 0.5; cursor: not-allowed;"{% endif %}
+                                    onclick="{% if can_mark_attendance %}updateAttendanceMobile('{{ member.id }}', 'present', '{{ meeting_date }}'){% else %}return false{% endif %}">
                                 <i class="fas fa-check"></i>
                             </button>
                             <button type="button" 
                                     class="action-btn absent-btn-mobile {% if attendance_data[member.id].absent %}active{% endif %}"
                                     data-member-id="{{ member.id }}"
-                                    onclick="updateAttendanceMobile('{{ member.id }}', 'absent', '{{ meeting_date }}')">
+                                    {% if not can_mark_attendance %}disabled style="opacity: 0.5; cursor: not-allowed;"{% endif %}
+                                    onclick="{% if can_mark_attendance %}updateAttendanceMobile('{{ member.id }}', 'absent', '{{ meeting_date }}'){% else %}return false{% endif %}">
                                 <i class="fas fa-times"></i>
-                            </button>
-                            <button type="button" 
-                                    class="action-btn clear-btn-mobile"
-                                    data-member-id="{{ member.id }}"
-                                    onclick="updateAttendanceMobile('{{ member.id }}', 'clear', '{{ meeting_date }}')">
-                                <i class="fas fa-undo"></i>
                             </button>
                         </div>
                         <div class="status-badge-mobile">
@@ -128,9 +142,13 @@
         {% endif %}
     </div>
 
-    {% if meeting_date_iso and (can_edit_visitor_count or visitor_attendance) %}
+    {% if meeting_date_iso and (attendance_submitted or can_edit_visitor_count or visitor_attendance) %}
     <div class="visitor-card visitor-card-mobile">
         <h5 class="visitor-title">Visitors today</h5>
+        {% if attendance_submitted %}
+        <p class="visitor-hint">Count saved with your submitted attendance. Not included in member attendance %.</p>
+        <div class="visitor-count-readonly-mobile" id="visitorCountDisplayMobileAlt">{{ visitor_count_total }}</div>
+        {% else %}
         <p class="visitor-hint">Optional. Uses keyboard or &minus; / +. Max 20. Saved when you submit attendance. Not included in member attendance %.</p>
         <div class="visitor-stepper">
             <button type="button" class="visitor-btn" aria-label="Decrease" {% if not can_edit_visitor_count %}disabled{% endif %}
@@ -145,6 +163,21 @@
         {% if visitor_saved_time_label and visitor_attendance %}
         <p class="visitor-saved">Last saved {{ visitor_saved_time_label }} by You</p>
         {% endif %}
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% if not can_mark_attendance and not attendance_submitted and attendance_locked_message %}
+    <div class="px-2 pb-3">
+        <div class="alert alert-warning mb-0" style="padding: 15px; border-radius: 10px; background: linear-gradient(135deg, #f39c12, #e67e22); color: white; border: none;">
+            <div class="d-flex align-items-center gap-2">
+                <i class="fas fa-lock"></i>
+                <div>
+                    <strong>Attendance unavailable</strong>
+                    <p class="mb-0 small" style="opacity:.95;">{{ attendance_locked_message }}</p>
+                </div>
+            </div>
+        </div>
     </div>
     {% endif %}
 </div>
@@ -422,6 +455,20 @@
     border-radius: 16px;
     border: 1px solid #34495e;
 }
+.submitted-results-banner-mobile {
+    padding: 1.1rem 1rem;
+    border-radius: 16px;
+    background: linear-gradient(135deg, #065f46 0%, #047857 50%, #0d9488 100%);
+    border: 1px solid rgba(16, 185, 129, 0.5);
+    box-shadow: 0 8px 24px rgba(16, 185, 129, 0.2);
+}
+.visitor-count-readonly-mobile {
+    text-align: center;
+    font-size: 2rem;
+    font-weight: 800;
+    color: #fff;
+    padding: 0.5rem 0;
+}
 .visitor-title {
     color: #fff;
     font-weight: 700;
@@ -594,6 +641,9 @@ function setMemberStatusMobile(memberId, status) {
         if (memberCard) {
             memberCard.classList.add('status-present');
         }
+        if (memberCard.dataset) {
+            memberCard.dataset.attendanceChoice = 'present';
+        }
         if (statusElement) {
             statusElement.textContent = 'Present';
             statusElement.className = 'status-text-mobile text-success';
@@ -605,6 +655,9 @@ function setMemberStatusMobile(memberId, status) {
     } else if (status === 'absent') {
         if (memberCard) {
             memberCard.classList.add('status-absent');
+        }
+        if (memberCard.dataset) {
+            memberCard.dataset.attendanceChoice = 'absent';
         }
         if (statusElement) {
             statusElement.textContent = 'Absent';
@@ -618,6 +671,9 @@ function setMemberStatusMobile(memberId, status) {
         if (memberCard) {
             memberCard.classList.add('status-pending');
         }
+        if (memberCard.dataset) {
+            memberCard.dataset.attendanceChoice = 'unset';
+        }
         if (statusElement) {
             statusElement.textContent = 'Not marked';
             statusElement.className = 'status-text-mobile text-muted';
@@ -626,6 +682,10 @@ function setMemberStatusMobile(memberId, status) {
 }
 
 function updateStatsMobile() {
+    const container = document.querySelector('.mobile-attendance-container');
+    if (container && container.dataset.attendanceSubmitted === '1') {
+        return;
+    }
     const presentCards = document.querySelectorAll('.mobile-member-card.status-present').length;
     const absentCards = document.querySelectorAll('.mobile-member-card.status-absent').length;
     const pendingCards = document.querySelectorAll('.mobile-member-card.status-pending').length;
@@ -748,7 +808,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 {% block desktop_content %}
 <!-- DESKTOP ATTENDANCE UI -->
-<div class="desktop-attendance-container">
+<div class="desktop-attendance-container"{% if attendance_submitted %} data-attendance-submitted="1"{% endif %}>
     <!-- Desktop Header -->
     <div class="desktop-header">
         <div class="d-flex justify-content-between align-items-center">
@@ -771,7 +831,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <i class="fas fa-check-circle"></i>
                     </div>
                     <div class="stat-content">
-                        <div class="stat-number-desktop" id="presentCount-desktop">0</div>
+                        <div class="stat-number-desktop" id="presentCount-desktop">{% if attendance_submitted %}{{ attendance_present_count }}{% else %}0{% endif %}</div>
                         <div class="stat-label-desktop">Present</div>
                     </div>
                 </div>
@@ -782,7 +842,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <i class="fas fa-times-circle"></i>
                     </div>
                     <div class="stat-content">
-                        <div class="stat-number-desktop" id="absentCount-desktop">0</div>
+                        <div class="stat-number-desktop" id="absentCount-desktop">{% if attendance_submitted %}{{ attendance_absent_count }}{% else %}0{% endif %}</div>
                         <div class="stat-label-desktop">Absent</div>
                     </div>
                 </div>
@@ -793,7 +853,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <i class="fas fa-clock"></i>
                     </div>
                     <div class="stat-content">
-                        <div class="stat-number-desktop" id="pendingCount-desktop">0</div>
+                        <div class="stat-number-desktop" id="pendingCount-desktop">{% if attendance_submitted %}{{ attendance_pending_count }}{% else %}0{% endif %}</div>
                         <div class="stat-label-desktop">Pending</div>
                 </div>
             </div>
@@ -811,9 +871,27 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
         </div>
     </div>
+
+    {% if attendance_submitted %}
+    <div class="submitted-results-banner-desktop mb-4 p-4 rounded-3" style="background: linear-gradient(135deg, #065f46 0%, #047857 50%, #0d9488 100%); border: 1px solid rgba(16, 185, 129, 0.5); box-shadow: 0 8px 24px rgba(16, 185, 129, 0.2);">
+        <div class="d-flex align-items-start gap-3">
+            <i class="fas fa-circle-check fa-2x" style="color:#6ee7b7;"></i>
+            <div>
+                <h4 class="text-white fw-bold mb-2">Attendance submitted</h4>
+                <p class="text-white mb-2" style="opacity:.9;">Totals for this meeting are saved and cannot be changed.</p>
+                <p class="text-white mb-0" style="opacity:.95;">
+                    <strong>{{ attendance_present_count }}</strong> present ·
+                    <strong>{{ attendance_absent_count }}</strong> absent
+                    {% if attendance_pending_count > 0 %}· <strong>{{ attendance_pending_count }}</strong> not marked{% endif %}
+                    · <strong>{{ visitor_count_total }}</strong> visitors
+                </p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
             
     <!-- Global Action Buttons -->
-    {% if members %}
+    {% if members and can_mark_attendance %}
     <div class="desktop-global-actions">
         <button type="button" class="global-action-btn all-present-btn-desktop" onclick="markAllPresentDesktop()">
             <i class="fas fa-check-double"></i>
@@ -830,14 +908,14 @@ document.addEventListener('DOMContentLoaded', function() {
     <div class="desktop-members-section">
         <div class="section-header-desktop">
             <h4 class="section-title-desktop">Member Attendance</h4>
-            <div class="section-subtitle">Mark members as present or absent, then click Submit</div>
+            <div class="section-subtitle">{% if attendance_submitted %}Submitted — review only{% else %}Mark members as present or absent, then click Submit{% endif %}</div>
         </div>
                 
         {% if members %}
             <form id="attendanceFormDesktop">
                 <div class="desktop-members-grid">
                     {% for member in members %}
-                    <div class="desktop-member-card" data-member-id="{{ member.id }}">
+                    <div class="desktop-member-card" data-member-id="{{ member.id }}" data-attendance-choice="{% if attendance_data[member.id].present %}present{% elif attendance_data[member.id].absent %}absent{% else %}unset{% endif %}">
                         <div class="member-header-desktop">
                             <div class="member-avatar-desktop">
                                 <span class="avatar-text-desktop">{{ member.name[0].upper() }}</span>
@@ -875,7 +953,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                     <i class="fas fa-check-circle"></i>
                                 </button>
                                 <button type="button" 
-                                        class="icon-btn-desktop absent-icon-btn-desktop {% if not attendance_data[member.id].present %}active{% endif %}"
+                                        class="icon-btn-desktop absent-icon-btn-desktop {% if attendance_data[member.id].absent %}active{% endif %}"
                                         data-member-id="{{ member.id }}"
                                         onclick="{% if can_mark_attendance %}markMemberAbsentDesktop(this){% else %}showAttendanceLockedMessage(){% endif %}"
                                         title="{% if can_mark_attendance %}Mark as Absent{% else %}Attendance is locked{% endif %}"
@@ -906,9 +984,13 @@ document.addEventListener('DOMContentLoaded', function() {
         {% endif %}
     </div>
 
-    {% if meeting_date_iso and (can_edit_visitor_count or visitor_attendance) %}
+    {% if meeting_date_iso and (attendance_submitted or can_edit_visitor_count or visitor_attendance) %}
     <div class="visitor-card visitor-card-desktop">
         <h5 class="visitor-title-desktop">Visitors today</h5>
+        {% if attendance_submitted %}
+        <p class="visitor-hint-desktop">Count saved with your submitted attendance. Not included in member attendance %.</p>
+        <div class="visitor-count-readonly-desktop text-center fw-bold text-white py-3" style="font-size:2rem;">{{ visitor_count_total }}</div>
+        {% else %}
         <p class="visitor-hint-desktop">Optional. Type a number (0&ndash;20) or use &minus; / +. Saved when you submit attendance. Not included in member attendance %.</p>
         <div class="visitor-stepper visitor-stepper-desktop">
             <button type="button" class="visitor-btn-desktop" aria-label="Decrease" {% if not can_edit_visitor_count %}disabled{% endif %}
@@ -923,18 +1005,19 @@ document.addEventListener('DOMContentLoaded', function() {
         {% if visitor_saved_time_label and visitor_attendance %}
         <p class="visitor-saved-desktop">Last saved {{ visitor_saved_time_label }} by You</p>
         {% endif %}
+        {% endif %}
     </div>
     {% endif %}
     
-    <!-- Attendance Locked Warning -->
-    {% if not can_mark_attendance %}
+    <!-- Attendance unavailable (not shown when already submitted) -->
+    {% if not can_mark_attendance and not attendance_submitted and attendance_locked_message %}
     <div class="desktop-submit-container">
         <div class="alert alert-warning" style="margin: 20px 0; padding: 20px; border-radius: 10px; background: linear-gradient(135deg, #f39c12, #e67e22); color: white; border: none; box-shadow: 0 4px 15px rgba(243, 156, 18, 0.3);">
             <div style="display: flex; align-items: center; gap: 15px;">
                 <i class="fas fa-lock" style="font-size: 24px;"></i>
                 <div>
-                    <h5 style="margin: 0 0 5px 0; font-weight: 600;">Attendance Locked</h5>
-                    <p style="margin: 0; opacity: 0.95;">Attendance can only be marked from Tuesday 5:00 PM through Thursday 11:59 PM. This week's attendance is now closed.</p>
+                    <h5 style="margin: 0 0 5px 0; font-weight: 600;">Attendance unavailable</h5>
+                    <p style="margin: 0; opacity: 0.95;">{{ attendance_locked_message }}</p>
                 </div>
             </div>
         </div>
@@ -944,10 +1027,12 @@ document.addEventListener('DOMContentLoaded', function() {
     <!-- Submit Button -->
     {% if members and can_mark_attendance %}
     <div class="desktop-submit-container">
-        <button type="button" class="desktop-submit-btn" onclick="submitAttendanceDesktop()">
+        <button type="button" class="desktop-submit-btn" id="submitAttendanceDesktopBtn" onclick="submitAttendanceDesktop()"
+                {% if attendance_pending_count > 0 %}disabled aria-disabled="true"{% endif %}>
             <i class="fas fa-check-circle"></i>
             Submit Attendance
         </button>
+        <p id="submitAttendanceDesktopHint" class="text-center mt-2 mb-0 small" style="color:#95a5a6;{% if attendance_pending_count == 0 %} display: none;{% endif %}">Choose <strong>Present</strong> or <strong>Absent</strong> for every member before you submit.</p>
     </div>
     {% endif %}
     
@@ -1592,6 +1677,27 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <!-- Desktop JavaScript -->
 <script>
+function refreshDesktopSubmitState() {
+    const submitBtn = document.getElementById('submitAttendanceDesktopBtn');
+    const hint = document.getElementById('submitAttendanceDesktopHint');
+    if (!submitBtn) {
+        return;
+    }
+    const cards = document.querySelectorAll('.desktop-member-card[data-attendance-choice]');
+    let unset = 0;
+    cards.forEach(function(el) {
+        if (el.dataset.attendanceChoice === 'unset') {
+            unset += 1;
+        }
+    });
+    const ready = cards.length > 0 && unset === 0;
+    submitBtn.disabled = !ready;
+    submitBtn.setAttribute('aria-disabled', ready ? 'false' : 'true');
+    if (hint) {
+        hint.style.display = ready ? 'none' : 'block';
+    }
+}
+
 // Mark member as present
 window.markMemberPresentDesktop = function(buttonElement) {
     try {
@@ -1606,7 +1712,6 @@ window.markMemberPresentDesktop = function(buttonElement) {
             return;
         }
         
-        // Find the parent member card
         const memberCard = buttonElement.closest('.desktop-member-card');
         if (!memberCard) {
             console.error('Member card not found');
@@ -1625,8 +1730,10 @@ window.markMemberPresentDesktop = function(buttonElement) {
         checkbox.checked = true;
         presentBtn.classList.add('active');
         absentBtn.classList.remove('active');
+        memberCard.dataset.attendanceChoice = 'present';
         
         updateCountsDesktop();
+        refreshDesktopSubmitState();
     } catch (error) {
         console.error('Error in markMemberPresentDesktop:', error);
     }
@@ -1646,7 +1753,6 @@ window.markMemberAbsentDesktop = function(buttonElement) {
             return;
         }
         
-        // Find the parent member card
         const memberCard = buttonElement.closest('.desktop-member-card');
         if (!memberCard) {
             console.error('Member card not found');
@@ -1665,8 +1771,10 @@ window.markMemberAbsentDesktop = function(buttonElement) {
         checkbox.checked = false;
         presentBtn.classList.remove('active');
         absentBtn.classList.add('active');
+        memberCard.dataset.attendanceChoice = 'absent';
         
         updateCountsDesktop();
+        refreshDesktopSubmitState();
     } catch (error) {
         console.error('Error in markMemberAbsentDesktop:', error);
     }
@@ -1674,60 +1782,81 @@ window.markMemberAbsentDesktop = function(buttonElement) {
 
 // Mark all present
 window.markAllPresentDesktop = function() {
-    const checkboxes = document.querySelectorAll('.member-checkbox-desktop');
-    const presentButtons = document.querySelectorAll('.present-icon-btn-desktop');
-    const absentButtons = document.querySelectorAll('.absent-icon-btn-desktop');
-    
-    checkboxes.forEach(checkbox => {
-        checkbox.checked = true;
-    });
-    
-    presentButtons.forEach(btn => {
-        btn.classList.add('active');
-    });
-    
-    absentButtons.forEach(btn => {
-        btn.classList.remove('active');
+    document.querySelectorAll('.desktop-member-card').forEach(function(memberCard) {
+        const checkbox = memberCard.querySelector('.member-checkbox-desktop');
+        const presentBtn = memberCard.querySelector('.present-icon-btn-desktop');
+        const absentBtn = memberCard.querySelector('.absent-icon-btn-desktop');
+        if (checkbox) {
+            checkbox.checked = true;
+        }
+        if (presentBtn) {
+            presentBtn.classList.add('active');
+        }
+        if (absentBtn) {
+            absentBtn.classList.remove('active');
+        }
+        memberCard.dataset.attendanceChoice = 'present';
     });
     
     updateCountsDesktop();
+    refreshDesktopSubmitState();
 }
 
 // Mark all absent
 window.markAllAbsentDesktop = function() {
-    const checkboxes = document.querySelectorAll('.member-checkbox-desktop');
-    const presentButtons = document.querySelectorAll('.present-icon-btn-desktop');
-    const absentButtons = document.querySelectorAll('.absent-icon-btn-desktop');
-    
-    checkboxes.forEach(checkbox => {
-        checkbox.checked = false;
-    });
-    
-    presentButtons.forEach(btn => {
-        btn.classList.remove('active');
-    });
-    
-    absentButtons.forEach(btn => {
-        btn.classList.add('active');
+    document.querySelectorAll('.desktop-member-card').forEach(function(memberCard) {
+        const checkbox = memberCard.querySelector('.member-checkbox-desktop');
+        const presentBtn = memberCard.querySelector('.present-icon-btn-desktop');
+        const absentBtn = memberCard.querySelector('.absent-icon-btn-desktop');
+        if (checkbox) {
+            checkbox.checked = false;
+        }
+        if (presentBtn) {
+            presentBtn.classList.remove('active');
+        }
+        if (absentBtn) {
+            absentBtn.classList.add('active');
+        }
+        memberCard.dataset.attendanceChoice = 'absent';
     });
     
     updateCountsDesktop();
+    refreshDesktopSubmitState();
 }
 
 // Update counts
 function updateCountsDesktop() {
-    const checkedBoxes = document.querySelectorAll('.member-checkbox-desktop:checked');
-    const presentCount = checkedBoxes.length;
-    const totalMembers = document.querySelectorAll('.member-checkbox-desktop').length;
-    const absentCount = totalMembers - presentCount;
+    const container = document.querySelector('.desktop-attendance-container');
+    if (container && container.dataset.attendanceSubmitted === '1') {
+        return;
+    }
+    let presentCount = 0;
+    let absentCount = 0;
+    let pendingCount = 0;
+    document.querySelectorAll('.desktop-member-card[data-attendance-choice]').forEach(function(card) {
+        const c = card.dataset.attendanceChoice;
+        if (c === 'present') {
+            presentCount += 1;
+        } else if (c === 'absent') {
+            absentCount += 1;
+        } else {
+            pendingCount += 1;
+        }
+    });
     
     const presentCountEl = document.getElementById('presentCount-desktop');
     const absentCountEl = document.getElementById('absentCount-desktop');
     const pendingCountEl = document.getElementById('pendingCount-desktop');
     
-    if (presentCountEl) presentCountEl.textContent = presentCount;
-    if (absentCountEl) absentCountEl.textContent = absentCount;
-    if (pendingCountEl) pendingCountEl.textContent = 0; // No pending with checkbox system
+    if (presentCountEl) {
+        presentCountEl.textContent = presentCount;
+    }
+    if (absentCountEl) {
+        absentCountEl.textContent = absentCount;
+    }
+    if (pendingCountEl) {
+        pendingCountEl.textContent = pendingCount;
+    }
 }
 
 window.getVisitorCountInputForAttendanceDetail = function() {
@@ -1743,11 +1872,24 @@ window.submitAttendanceDesktop = function() {
     showAttendanceLockedMessage();
     return;
     {% endif %}
-    
-    const checkedBoxes = document.querySelectorAll('.member-checkbox-desktop:checked');
-    const presentCount = checkedBoxes.length;
-    const totalMembers = document.querySelectorAll('.member-checkbox-desktop').length;
-    const absentCount = totalMembers - presentCount;
+
+    let presentCount = 0;
+    let absentCount = 0;
+    let unset = 0;
+    document.querySelectorAll('.desktop-member-card[data-attendance-choice]').forEach(function(card) {
+        const c = card.dataset.attendanceChoice;
+        if (c === 'present') {
+            presentCount += 1;
+        } else if (c === 'absent') {
+            absentCount += 1;
+        } else {
+            unset += 1;
+        }
+    });
+    if (unset > 0) {
+        showFeedbackDesktop('Choose present or absent for every member before submitting.', 'error');
+        return;
+    }
     
     document.getElementById('confirmPresentCountDesktop').textContent = presentCount;
     document.getElementById('confirmAbsentCountDesktop').textContent = absentCount;
@@ -1808,15 +1950,14 @@ function postVisitorAfterBulkIfNeededDesktop(meetingDate) {
 // Confirm and submit attendance
 window.confirmSubmitDesktop = function() {
     try {
-        const confirmBtn = document.querySelector('.confirm-btn-desktop');
-        const memberCheckboxes = document.querySelectorAll('.member-checkbox-desktop');
+        const desktopCards = document.querySelectorAll('.desktop-member-card[data-attendance-choice]');
         
         if (!confirmBtn) {
             console.error('Confirm button not found');
             return;
         }
         
-        if (memberCheckboxes.length === 0) {
+        if (desktopCards.length === 0) {
             showFeedbackDesktop('No members found to submit', 'error');
             return;
         }
@@ -1825,21 +1966,21 @@ window.confirmSubmitDesktop = function() {
         confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Submitting...</span>';
         
         const attendance = [];
-        memberCheckboxes.forEach(checkbox => {
-            const memberId = checkbox.getAttribute('data-member-id');
-            if (!memberId) {
-                console.warn('Checkbox missing member ID');
+        document.querySelectorAll('.desktop-member-card[data-attendance-choice]').forEach(function(card) {
+            const memberId = card.dataset.memberId;
+            const choice = card.dataset.attendanceChoice;
+            if (!memberId || (choice !== 'present' && choice !== 'absent')) {
                 return;
             }
-            const status = checkbox.checked ? 'present' : 'absent';
             attendance.push({
                 member_id: memberId,
-                status: status
+                status: choice
             });
         });
-        
-        if (attendance.length === 0) {
-            showFeedbackDesktop('No attendance data to submit', 'error');
+
+        const expectedRows = document.querySelectorAll('.desktop-member-card[data-attendance-choice]').length;
+        if (attendance.length !== expectedRows || expectedRows === 0) {
+            showFeedbackDesktop('Choose present or absent for every member before submitting.', 'error');
             confirmBtn.disabled = false;
             confirmBtn.innerHTML = '<i class="fas fa-check"></i><span>Yes, Submit</span>';
             return;
@@ -1929,6 +2070,7 @@ function showFeedbackDesktop(message, type) {
 // Initialize desktop attendance
 document.addEventListener('DOMContentLoaded', function() {
     updateCountsDesktop();
+    refreshDesktopSubmitState();
 });
 </script>
 
