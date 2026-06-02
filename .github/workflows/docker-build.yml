@@ -109,37 +109,36 @@ jobs:
             "$IMAGE"
 
   # ---------------------------------------------------------------------------
-  # Deploy Production — existing, no change
+  # Deploy Production (cellapp-prod) — self-hosted runner on prod VM
   # ---------------------------------------------------------------------------
   deploy-production:
     name: deploy-production
     needs: build-and-push
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, prod-server]
     permissions:
       contents: read
       packages: read
     steps:
-      - name: Deploy production container
-        uses: appleboy/ssh-action@v1.2.5
-        with:
-          host: ${{ secrets.PROD_SERVER_HOST }}
-          username: ${{ secrets.PROD_SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY_PROD }}
-          script: |
-            set -e
-            OWNER_LOWER="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
-            if [ -n "${{ secrets.GHCR_PULL_TOKEN }}" ] && [ -n "${{ secrets.GHCR_USERNAME }}" ]; then
-              echo "${{ secrets.GHCR_PULL_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
-            else
-              echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "$OWNER_LOWER" --password-stdin
-            fi
-            IMAGE="${{ needs.build-and-push.outputs.image }}"
-            docker pull "$IMAGE"
-            docker rm -f cellapp-prod || true
-            docker run -d \
-              --name cellapp-prod \
-              --restart unless-stopped \
-              --env-file /var/www/cellapp/.env \
-              -p 8000:5001 \
-              "$IMAGE"
+      - name: Deploy cellapp-prod container
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_PAT: ${{ secrets.GHCR_PULL_TOKEN }}
+          GHCR_USER: ${{ secrets.GHCR_USERNAME }}
+        run: |
+          set -e
+          OWNER_LOWER="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          if [ -n "$GHCR_PAT" ] && [ -n "$GHCR_USER" ]; then
+            echo "$GHCR_PAT" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+          else
+            echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$OWNER_LOWER" --password-stdin
+          fi
+          IMAGE="${{ needs.build-and-push.outputs.image }}"
+          docker pull "$IMAGE"
+          docker rm -f cellapp-prod || true
+          docker run -d \
+            --name cellapp-prod \
+            --restart unless-stopped \
+            --env-file /var/www/cellapp/.env \
+            -p 8001:5001 \
+            "$IMAGE"
