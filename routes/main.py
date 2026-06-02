@@ -13,6 +13,7 @@ from utils.tutorials_access import (
     build_weekly_tutorial_dashboard_rows,
     fetch_leader_cell_category,
 )
+from utils.app_time import app_now, app_today, get_app_tz
 # Load environment variables
 load_dotenv()
 # Supabase configuration
@@ -670,7 +671,7 @@ def get_tutorial_meeting_date_corrected():
     Tuesday 12:00 AM - 11:59 PM: Show current Tuesday
     Wednesday 12:00 AM: Switch to next Tuesday
     Wednesday - Monday: Show next Tuesday"""
-    now = datetime.now()
+    now = app_now()
     today = now.date()
     
     # Calculate days until next Tuesday
@@ -693,7 +694,7 @@ def get_attendance_meeting_date_corrected():
     Tuesday 12:00 AM - 11:59 PM: Show current Tuesday
     Wednesday 12:00 AM - Monday 11:59 PM: Show same Tuesday (current week)
     Tuesday 12:00 AM: Switch to new current Tuesday"""
-    now = datetime.now()
+    now = app_now()
     today = now.date()
     
     # Calculate days until next Tuesday
@@ -729,7 +730,7 @@ def get_attendance_meeting_date_corrected():
 
 def get_attendance_opening_datetime(meeting_date):
     """First moment attendance may be marked for meeting_date (Tuesday): Tue 17:00:00 local."""
-    return datetime.combine(meeting_date, time(17, 0, 0))
+    return datetime.combine(meeting_date, time(17, 0, 0), tzinfo=get_app_tz())
 
 
 def get_attendance_deadline(meeting_date):
@@ -745,7 +746,7 @@ def get_attendance_deadline(meeting_date):
     """
     meeting_thursday = meeting_date + timedelta(days=2)
     deadline = datetime.combine(
-        meeting_thursday, datetime.max.time().replace(hour=23, minute=59, second=59)
+        meeting_thursday, time(23, 59, 59), tzinfo=get_app_tz()
     )
     return deadline
 
@@ -759,7 +760,7 @@ def get_attendance_marking_countdown_payload(meeting_date):
     """
     if meeting_date is None:
         return None
-    now = datetime.now()
+    now = app_now()
     tuesday = meeting_date
     for _ in range(520):
         opens_at = get_attendance_opening_datetime(tuesday)
@@ -784,7 +785,7 @@ def can_mark_attendance(meeting_date):
     Returns:
         bool: True if attendance can be marked, False otherwise
     """
-    now = datetime.now()
+    now = app_now()
     opens = get_attendance_opening_datetime(meeting_date)
     deadline = get_attendance_deadline(meeting_date)
     return opens <= now <= deadline
@@ -840,7 +841,7 @@ def attendance_edit_state(parsed_date, submitted_iso_set):
             'attendance_submitted': False,
             'locked_reason': None,
         }
-    today = datetime.now().date()
+    today = app_today()
     iso = parsed_date.isoformat()
     is_upcoming = parsed_date > today
     submitted = iso in submitted_iso_set
@@ -863,7 +864,7 @@ def attendance_edit_state(parsed_date, submitted_iso_set):
             'attendance_submitted': False,
             'locked_reason': None,
         }
-    now = datetime.now()
+    now = app_now()
     opens = get_attendance_opening_datetime(parsed_date)
     if now < opens:
         locked_reason = 'window_not_open'
@@ -987,7 +988,7 @@ def enrich_meetings_with_attendance_eligibility(meetings, leader_id):
     """Add can_mark_attendance, attendance_submitted, locked_reason, calendar_upcoming per meeting row."""
     if not meetings:
         return
-    today = datetime.now().date()
+    today = app_today()
     all_iso = []
     for m in meetings:
         do = m.get('date_obj')
@@ -1034,7 +1035,7 @@ def get_attendance_reminder_info(meeting_date):
             'is_past_deadline': bool
         }
     """
-    now = datetime.now()
+    now = app_now()
     deadline = get_attendance_deadline(meeting_date)
     time_remaining = deadline - now
     
@@ -1059,7 +1060,7 @@ def get_attendance_reminder_info(meeting_date):
 
 def get_past_tuesdays():
     """Calculate the past 4 Tuesday dates (including today if today is Tuesday)"""
-    today = datetime.now()
+    today = app_now()
     tuesdays = []
     # Find the most recent past Tuesday
     days_back = today.weekday() - 1  # Tuesday is 1
@@ -1156,7 +1157,7 @@ def index():
 
             tutorial_list = []
             try:
-                today = datetime.now().date()
+                today = app_today()
                 parsed_slots = []
                 for meeting in meetings_for_dashboard:
                     meeting_date = meeting.get('meeting_date')
@@ -1233,7 +1234,7 @@ def index():
                 'position': '-'
             }
         past_tuesdays = get_past_tuesdays()
-        today = datetime.now()
+        today = app_now()
         
         # Get attendance status for current week (using attendance-specific date logic)
         attendance_status = 'incomplete'
@@ -3109,7 +3110,7 @@ def tutorials_list():
                                      tutorial_list=[],
                                      user=session['user'])
             
-            today = datetime.now().date()
+            today = app_today()
             
             # Process each meeting from the meetings table
             for meeting in meetings_result.data:
@@ -3305,7 +3306,7 @@ def attendance_list():
                         week_status = 'incomplete'
                     
                     # Check if this is an upcoming meeting
-                    today = datetime.now().date()
+                    today = app_today()
                     is_upcoming = parsed_date > today
                     
                     attendance_item = {
@@ -3331,8 +3332,8 @@ def attendance_list():
                     continue
         
         # Sort: unmarked by date (most recent first), marked by date (most recent first)
-        unmarked_list.sort(key=lambda x: x.get('date_obj', datetime.now().date()), reverse=True)
-        marked_list.sort(key=lambda x: x.get('date_obj', datetime.now().date()), reverse=True)
+        unmarked_list.sort(key=lambda x: x.get('date_obj', app_today()), reverse=True)
+        marked_list.sort(key=lambda x: x.get('date_obj', app_today()), reverse=True)
 
         all_iso = []
         for item in unmarked_list:
