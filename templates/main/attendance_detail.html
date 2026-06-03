@@ -4,7 +4,7 @@
 
 {% block mobile_content %}
 <!-- MOBILE ATTENDANCE UI -->
-<div class="mobile-attendance-container"{% if attendance_submitted %} data-attendance-submitted="1"{% endif %}>
+<div class="mobile-attendance-container"{% if attendance_submitted %} data-attendance-submitted="1"{% endif %} data-can-mark-attendance="{{ '1' if can_mark_attendance else '0' }}">
     <!-- Mobile Header -->
     <div class="mobile-header">
         <div class="d-flex justify-content-between align-items-center">
@@ -104,14 +104,14 @@
                                     class="action-btn present-btn-mobile {% if attendance_data[member.id].present %}active{% endif %}"
                                     data-member-id="{{ member.id }}"
                                     {% if not can_mark_attendance %}disabled style="opacity: 0.5; cursor: not-allowed;"{% endif %}
-                                    onclick="{% if can_mark_attendance %}updateAttendanceMobile('{{ member.id }}', 'present', '{{ meeting_date }}'){% else %}return false{% endif %}">
+                                    onclick="updateAttendanceMobile('{{ member.id }}', 'present', '{{ meeting_date }}')">
                                 <i class="fas fa-check"></i>
                             </button>
                             <button type="button" 
                                     class="action-btn absent-btn-mobile {% if attendance_data[member.id].absent %}active{% endif %}"
                                     data-member-id="{{ member.id }}"
                                     {% if not can_mark_attendance %}disabled style="opacity: 0.5; cursor: not-allowed;"{% endif %}
-                                    onclick="{% if can_mark_attendance %}updateAttendanceMobile('{{ member.id }}', 'absent', '{{ meeting_date }}'){% else %}return false{% endif %}">
+                                    onclick="updateAttendanceMobile('{{ member.id }}', 'absent', '{{ meeting_date }}')">
                                 <i class="fas fa-times"></i>
                             </button>
                         </div>
@@ -541,6 +541,10 @@
 <!-- Mobile JavaScript -->
 <script>
 function updateAttendanceMobile(memberId, status, meetingDate) {
+    const container = document.querySelector('.mobile-attendance-container');
+    if (container && container.dataset.canMarkAttendance === '0') {
+        return;
+    }
     const memberCard = document.querySelector(`[data-member-id="${memberId}"]`);
     
     // Check if memberCard exists
@@ -767,7 +771,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 {% block desktop_content %}
 <!-- DESKTOP ATTENDANCE UI -->
-<div class="desktop-attendance-container"{% if attendance_submitted %} data-attendance-submitted="1"{% endif %}>
+<div class="desktop-attendance-container"{% if attendance_submitted %} data-attendance-submitted="1"{% endif %} data-can-mark-attendance="{{ '1' if can_mark_attendance else '0' }}">
     <!-- Desktop Header -->
     <div class="desktop-header">
         <div class="d-flex justify-content-between align-items-center">
@@ -906,16 +910,16 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <button type="button" 
                                         class="icon-btn-desktop present-icon-btn-desktop {% if attendance_data[member.id].present %}active{% endif %}"
                                         data-member-id="{{ member.id }}"
-                                        onclick="{% if can_mark_attendance %}markMemberPresentDesktop(this){% else %}showAttendanceLockedMessage(){% endif %}"
-                                        title="{% if can_mark_attendance %}Mark as Present{% else %}Attendance is locked{% endif %}"
+                                        onclick="markMemberPresentDesktop(this)"
+                                        title="Mark as Present"
                                         {% if not can_mark_attendance %}disabled style="opacity: 0.5; cursor: not-allowed;"{% endif %}>
                                     <i class="fas fa-check-circle"></i>
                                 </button>
                                 <button type="button" 
                                         class="icon-btn-desktop absent-icon-btn-desktop {% if attendance_data[member.id].absent %}active{% endif %}"
                                         data-member-id="{{ member.id }}"
-                                        onclick="{% if can_mark_attendance %}markMemberAbsentDesktop(this){% else %}showAttendanceLockedMessage(){% endif %}"
-                                        title="{% if can_mark_attendance %}Mark as Absent{% else %}Attendance is locked{% endif %}"
+                                        onclick="markMemberAbsentDesktop(this)"
+                                        title="Mark as Absent"
                                         {% if not can_mark_attendance %}disabled style="opacity: 0.5; cursor: not-allowed;"{% endif %}>
                                     <i class="fas fa-times-circle"></i>
                                 </button>
@@ -990,7 +994,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <i class="fas fa-check-circle"></i>
             Submit Attendance
         </button>
-        <p id="submitAttendanceDesktopHint" class="text-center mt-2 mb-0 small" style="color:#95a5a6;{% if attendance_pending_count == 0 %} display: none;{% endif %}">Choose <strong>Present</strong> or <strong>Absent</strong> for every member before you submit.</p>
+        <p id="submitAttendanceDesktopHint" class="text-center mt-2 mb-0 small submit-hint-desktop{% if attendance_pending_count == 0 %} d-none{% endif %}">Choose <strong>Present</strong> or <strong>Absent</strong> for every member before you submit.</p>
     </div>
     {% endif %}
     
@@ -1437,6 +1441,10 @@ document.addEventListener('DOMContentLoaded', function() {
     transform: none;
 }
 
+.submit-hint-desktop {
+    color: #95a5a6;
+}
+
 /* Confirmation Modal */
 .confirm-modal-desktop {
     position: fixed;
@@ -1643,6 +1651,11 @@ function refreshDesktopSubmitState() {
 // Mark member as present
 window.markMemberPresentDesktop = function(buttonElement) {
     try {
+        const attendanceContainer = document.querySelector('.desktop-attendance-container');
+        if (attendanceContainer && attendanceContainer.dataset.canMarkAttendance === '0') {
+            showAttendanceLockedMessage();
+            return;
+        }
         if (!buttonElement) {
             console.error('Button element not provided');
             return;
@@ -1684,6 +1697,11 @@ window.markMemberPresentDesktop = function(buttonElement) {
 // Mark member as absent
 window.markMemberAbsentDesktop = function(buttonElement) {
     try {
+        const attendanceContainer = document.querySelector('.desktop-attendance-container');
+        if (attendanceContainer && attendanceContainer.dataset.canMarkAttendance === '0') {
+            showAttendanceLockedMessage();
+            return;
+        }
         if (!buttonElement) {
             console.error('Button element not provided');
             return;
@@ -1810,10 +1828,11 @@ window.getVisitorCountInputForAttendanceDetail = function() {
 
 // Show confirmation modal
 window.submitAttendanceDesktop = function() {
-    {% if not can_mark_attendance %}
-    showAttendanceLockedMessage();
-    return;
-    {% endif %}
+    const attendanceContainer = document.querySelector('.desktop-attendance-container');
+    if (attendanceContainer && attendanceContainer.dataset.canMarkAttendance === '0') {
+        showAttendanceLockedMessage();
+        return;
+    }
 
     let presentCount = 0;
     let absentCount = 0;
@@ -1891,6 +1910,7 @@ function postVisitorAfterBulkIfNeededDesktop(meetingDate) {
 // Confirm and submit attendance
 window.confirmSubmitDesktop = function() {
     try {
+        const confirmBtn = document.querySelector('.confirm-btn-desktop');
         const desktopCards = document.querySelectorAll('.desktop-member-card[data-attendance-choice]');
         
         if (!confirmBtn) {
@@ -1976,10 +1996,10 @@ window.confirmSubmitDesktop = function() {
     } catch (error) {
         console.error('Error in confirmSubmitDesktop:', error);
         showFeedbackDesktop('An error occurred. Please try again.', 'error');
-        const confirmBtn = document.querySelector('.confirm-btn-desktop');
-        if (confirmBtn) {
-            confirmBtn.disabled = false;
-            confirmBtn.innerHTML = '<i class="fas fa-check"></i><span>Yes, Submit</span>';
+        const confirmBtnReset = document.querySelector('.confirm-btn-desktop');
+        if (confirmBtnReset) {
+            confirmBtnReset.disabled = false;
+            confirmBtnReset.innerHTML = '<i class="fas fa-check"></i><span>Yes, Submit</span>';
         }
     }
 }
