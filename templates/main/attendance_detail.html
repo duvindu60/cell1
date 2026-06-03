@@ -149,16 +149,15 @@
         <p class="visitor-hint">Count saved with your submitted attendance. Not included in member attendance %.</p>
         <div class="visitor-count-readonly-mobile" id="visitorCountDisplayMobileAlt">{{ visitor_count_total }}</div>
         {% else %}
-        <p class="visitor-hint">Optional. Uses keyboard or &minus; / +. Max 20. Saved when you submit attendance. Not included in member attendance %.</p>
-        <div class="visitor-stepper">
-            <button type="button" class="visitor-btn" aria-label="Decrease" {% if not can_edit_visitor_count %}disabled{% endif %}
-                onclick="adjustVisitorField('visitorCountInputMobile', -1)">&minus;</button>
-            <input type="number" id="visitorCountInputMobile" class="visitor-input" min="0" max="20" step="1" inputmode="numeric" autocomplete="off" placeholder=""
-                {% if visitor_attendance %}value="{{ visitor_attendance.visitor_count }}"{% endif %}
-                {% if not can_edit_visitor_count %}readonly{% endif %}
-                onblur="clampVisitorField(this)" />
-            <button type="button" class="visitor-btn" aria-label="Increase" {% if not can_edit_visitor_count %}disabled{% endif %}
-                onclick="adjustVisitorField('visitorCountInputMobile', 1)">+</button>
+        <p class="visitor-hint">Optional. Choose 0&ndash;20 from the list. Saved when you submit attendance. Not included in member attendance %.</p>
+        <div class="visitor-select-wrap">
+            <select id="visitorCountInputMobile" class="visitor-select" aria-label="Number of visitors today"
+                {% if not can_edit_visitor_count %}disabled{% endif %}>
+                <option value="" {% if not visitor_attendance %}selected{% endif %}>Select count</option>
+                {% for n in range(21) %}
+                <option value="{{ n }}" {% if visitor_attendance and visitor_attendance.visitor_count == n %}selected{% endif %}>{{ n }}</option>
+                {% endfor %}
+            </select>
         </div>
         {% if visitor_saved_time_label and visitor_attendance %}
         <p class="visitor-saved">Last saved {{ visitor_saved_time_label }} by You</p>
@@ -187,7 +186,7 @@
 .mobile-attendance-container {
         padding: 1rem;
     min-height: calc(100vh - 5rem);
-    padding-bottom: 5rem;
+    padding-bottom: 10rem;
     background: #1a1a1a;
 }
 
@@ -449,7 +448,7 @@
 }
 
 .visitor-card-mobile {
-    margin-top: 1rem;
+    margin: 1rem 0 2rem 0;
     padding: 1.25rem;
     background: #2c3e50;
     border-radius: 16px;
@@ -481,40 +480,29 @@
     margin: 0 0 0.75rem 0;
     line-height: 1.35;
 }
-.visitor-stepper {
+.visitor-select-wrap {
     display: flex;
-    align-items: center;
     justify-content: center;
-    gap: 0.5rem;
 }
-.visitor-btn {
-    width: 44px;
-    height: 44px;
-    border-radius: 10px;
-    border: 1px solid #475569;
-    background: #34495e;
-    color: #fff;
-    font-size: 1.25rem;
-    line-height: 1;
-    cursor: pointer;
-}
-.visitor-btn:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-}
-.visitor-input {
-    width: 88px;
-    text-align: center;
-    font-size: 1.25rem;
+.visitor-select {
+    width: 100%;
+    max-width: 220px;
+    padding: 0.75rem 1rem;
+    font-size: 1.1rem;
     font-weight: 700;
-    padding: 0.4rem;
     border-radius: 10px;
     border: 1px solid #475569;
     background: #1a1a1a;
     color: #fff;
+    cursor: pointer;
 }
-.visitor-input:read-only {
-    opacity: 0.9;
+.visitor-select:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+.visitor-select option {
+    background: #1a1a1a;
+    color: #fff;
 }
 .visitor-saved {
     margin: 0.5rem 0 0 0;
@@ -704,35 +692,6 @@ function updateStatsMobile() {
         pendingCountEl.textContent = pendingCards;
     }
 }
-
-window.clampVisitorField = function(el) {
-    if (!el || el.readOnly) return;
-    const v = String(el.value).trim();
-    if (v === '') return;
-    let n = parseInt(v, 10);
-    if (isNaN(n)) {
-        el.value = '';
-        return;
-    }
-    n = Math.max(0, Math.min(20, n));
-    el.value = String(n);
-};
-
-window.adjustVisitorField = function(inputId, delta) {
-    const el = document.getElementById(inputId);
-    if (!el || el.readOnly) return;
-    let n;
-    const raw = String(el.value).trim();
-    if (raw === '') {
-        if (delta < 0) return;
-        n = 1;
-    } else {
-        n = parseInt(raw, 10);
-        if (isNaN(n)) n = 0;
-        n = Math.max(0, Math.min(20, n + delta));
-    }
-    el.value = String(n);
-};
 
 function showFeedbackMobile(message, type) {
     // Create toast notification
@@ -991,16 +950,15 @@ document.addEventListener('DOMContentLoaded', function() {
         <p class="visitor-hint-desktop">Count saved with your submitted attendance. Not included in member attendance %.</p>
         <div class="visitor-count-readonly-desktop text-center fw-bold text-white py-3" style="font-size:2rem;">{{ visitor_count_total }}</div>
         {% else %}
-        <p class="visitor-hint-desktop">Optional. Type a number (0&ndash;20) or use &minus; / +. Saved when you submit attendance. Not included in member attendance %.</p>
-        <div class="visitor-stepper visitor-stepper-desktop">
-            <button type="button" class="visitor-btn-desktop" aria-label="Decrease" {% if not can_edit_visitor_count %}disabled{% endif %}
-                onclick="adjustVisitorField('visitorCountInputDesktop', -1)">&minus;</button>
-            <input type="number" id="visitorCountInputDesktop" class="visitor-input-desktop" min="0" max="20" step="1" inputmode="numeric" autocomplete="off"
-                {% if visitor_attendance %}value="{{ visitor_attendance.visitor_count }}"{% endif %}
-                {% if not can_edit_visitor_count %}readonly{% endif %}
-                onblur="clampVisitorField(this)" />
-            <button type="button" class="visitor-btn-desktop" aria-label="Increase" {% if not can_edit_visitor_count %}disabled{% endif %}
-                onclick="adjustVisitorField('visitorCountInputDesktop', 1)">+</button>
+        <p class="visitor-hint-desktop">Optional. Choose 0&ndash;20 from the list. Saved when you submit attendance. Not included in member attendance %.</p>
+        <div class="visitor-select-wrap visitor-select-wrap-desktop">
+            <select id="visitorCountInputDesktop" class="visitor-select visitor-select-desktop" aria-label="Number of visitors today"
+                {% if not can_edit_visitor_count %}disabled{% endif %}>
+                <option value="" {% if not visitor_attendance %}selected{% endif %}>Select count</option>
+                {% for n in range(21) %}
+                <option value="{{ n }}" {% if visitor_attendance and visitor_attendance.visitor_count == n %}selected{% endif %}>{{ n }}</option>
+                {% endfor %}
+            </select>
         </div>
         {% if visitor_saved_time_label and visitor_attendance %}
         <p class="visitor-saved-desktop">Last saved {{ visitor_saved_time_label }} by You</p>
@@ -1164,7 +1122,7 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 
 .visitor-card-desktop {
-    margin-top: 1.5rem;
+    margin: 1.5rem 0 1.5rem 0;
     padding: 1.5rem 2rem;
     background: #21262d;
     border-radius: 16px;
@@ -1182,36 +1140,20 @@ document.addEventListener('DOMContentLoaded', function() {
     margin: 0 0 1rem 0;
     line-height: 1.4;
 }
-.visitor-stepper-desktop {
+.visitor-select-wrap-desktop {
     justify-content: flex-start;
 }
-.visitor-btn-desktop {
-    width: 48px;
-    height: 48px;
-    border-radius: 10px;
-    border: 1px solid #30363d;
-    background: #21262d;
-    color: #f0f6fc;
-    font-size: 1.35rem;
-    cursor: pointer;
-}
-.visitor-btn-desktop:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-}
-.visitor-input-desktop {
-    width: 100px;
-    text-align: center;
-    font-size: 1.35rem;
-    font-weight: 700;
-    padding: 0.5rem;
+.visitor-select-desktop {
+    max-width: 240px;
+    font-size: 1.15rem;
     border-radius: 10px;
     border: 1px solid #30363d;
     background: #0d1117;
     color: #f0f6fc;
 }
-.visitor-input-desktop:read-only {
-    opacity: 0.9;
+.visitor-select-desktop option {
+    background: #0d1117;
+    color: #f0f6fc;
 }
 .visitor-saved-desktop {
     margin: 0.75rem 0 0 0;
@@ -1924,8 +1866,7 @@ window.showAttendanceLockedMessage = function() {
 
 function postVisitorAfterBulkIfNeededDesktop(meetingDate) {
     const el = window.getVisitorCountInputForAttendanceDetail();
-    if (!el || el.readOnly) return Promise.resolve(null);
-    clampVisitorField(el);
+    if (!el || el.disabled) return Promise.resolve(null);
     const raw = String(el.value).trim();
     if (raw === '') return Promise.resolve(null);
     const n = parseInt(raw, 10);
