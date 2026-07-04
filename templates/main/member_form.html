@@ -209,6 +209,7 @@
             <option value="">Select cell category</option>
             <option value="youth" {{ 'selected' if request.form.cell_category == 'youth' or (member and member.cell_category == 'youth') else '' }}>Youth</option>
             <option value="young adult" {{ 'selected' if request.form.cell_category == 'young adult' or (member and member.cell_category == 'young adult') else '' }}>Young Adult</option>
+            <option value="adult" {{ 'selected' if request.form.cell_category == 'adult' or (member and member.cell_category == 'adult') else '' }}>Adult</option>
         </select>
         <div style="color: #6E7681; font-size: {{ '12px' if is_mobile else '14px' }}; margin-top: {{ '3px' if is_mobile else '4px' }};">Select cell category</div>
     </div>
