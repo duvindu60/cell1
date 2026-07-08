@@ -1883,7 +1883,7 @@ window.showAttendanceLockedMessage = function() {
     alert('Attendance can only be marked from Tuesday 6:00 AM through Thursday 11:59 PM. This week\'s attendance is now closed.');
 }
 
-function postVisitorAfterBulkIfNeededDesktop(meetingDate) {
+function postVisitorCountDesktop(meetingDate) {
     const el = window.getVisitorCountInputForAttendanceDetail();
     if (!el || el.disabled) return Promise.resolve(null);
     const raw = String(el.value).trim();
@@ -1948,50 +1948,49 @@ window.confirmSubmitDesktop = function() {
         }
         
         const meetingDate = '{{ meeting_date }}';
-        fetch(`/bulk_update_attendance/${encodeURIComponent(meetingDate)}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ attendance: attendance })
-        })
-        .then(response => {
-            if (!response.ok) {
-                return response.json().then(data => {
-                    throw new Error(data.message || 'Server error');
-                });
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.success) {
-                return postVisitorAfterBulkIfNeededDesktop(meetingDate).then(function(extra) {
+        // Save the visitor count BEFORE the bulk submit, because the bulk submit
+        // finalizes (locks) the week. Posting the visitor count after the lock
+        // would be rejected and the count lost.
+        postVisitorCountDesktop(meetingDate).then(function(visitorExtra) {
+            fetch(`/bulk_update_attendance/${encodeURIComponent(meetingDate)}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ attendance: attendance })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(data => {
+                        throw new Error(data.message || 'Server error');
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
                     closeConfirmModalDesktop();
                     showFeedbackDesktop(data.message, 'success');
-                    if (extra && extra.visitorLocked) {
+                    if (visitorExtra && (visitorExtra.visitorLocked || visitorExtra.visitorError)) {
                         setTimeout(function() {
-                            showFeedbackDesktop(extra.message, 'error');
-                        }, 400);
-                    } else if (extra && extra.visitorError) {
-                        setTimeout(function() {
-                            showFeedbackDesktop(extra.message, 'error');
+                            showFeedbackDesktop(visitorExtra.message, 'error');
                         }, 400);
                     }
                     setTimeout(() => {
                         window.location.reload();
                     }, 1500);
-                });
-            } else {
-                showFeedbackDesktop(data.message || 'Error submitting attendance', 'error');
+                } else {
+                    showFeedbackDesktop(data.message || 'Error submitting attendance', 'error');
+                    confirmBtn.disabled = false;
+                    confirmBtn.innerHTML = '<i class="fas fa-check"></i><span>Yes, Submit</span>';
+                }
+            })
+            .catch(error => {
+                console.error('Error submitting attendance:', error);
+                showFeedbackDesktop(error.message || 'Network error. Please try again.', 'error');
                 confirmBtn.disabled = false;
                 confirmBtn.innerHTML = '<i class="fas fa-check"></i><span>Yes, Submit</span>';
-            }
-        })
-        .catch(error => {
-            console.error('Error submitting attendance:', error);
-            showFeedbackDesktop(error.message || 'Network error. Please try again.', 'error');
-            confirmBtn.disabled = false;
-            confirmBtn.innerHTML = '<i class="fas fa-check"></i><span>Yes, Submit</span>';
+            });
         });
     } catch (error) {
         console.error('Error in confirmSubmitDesktop:', error);
