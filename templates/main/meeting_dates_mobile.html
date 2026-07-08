@@ -29,6 +29,13 @@
                             {% if meeting.description %}
                             <p class="meeting-description" style="color: #94a3b8; font-size: 0.85rem; margin-top: 0.25rem;">{{ meeting.description }}</p>
                             {% endif %}
+                            {% if meeting.attendance_submitted %}
+                            <div class="attendance-summary-stats" style="display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.5rem; font-size: 0.8rem; font-weight: 600;">
+                                <span style="color: #10b981;"><i class="fas fa-check-circle"></i> {{ meeting.present_count }} Present</span>
+                                <span style="color: #ef4444;"><i class="fas fa-times-circle"></i> {{ meeting.absent_count }} Absent</span>
+                                <span style="color: #3b82f6;"><i class="fas fa-user-friends"></i> {{ meeting.visitor_count }} Visitors</span>
+                            </div>
+                            {% endif %}
                         </div>
                         <div class="text-end d-flex flex-column gap-2">
                             <div class="d-flex gap-2">
@@ -42,7 +49,9 @@
                                     <i class="fas fa-user-check"></i>
                                 </a>
                                 {% elif meeting.attendance_submitted %}
-                                <span class="btn-custom-success" style="opacity: 0.55; cursor: not-allowed;" title="Attendance submitted"><i class="fas fa-lock"></i></span>
+                                <a href="{{ url_for('main.attendance_detail', meeting_date=meeting.date) }}" class="btn-custom-success" title="View attendance summary">
+                                    <i class="fas fa-chart-bar"></i>
+                                </a>
                                 {% elif meeting.locked_reason == 'window_not_open' %}
                                 <span class="btn-custom-success" style="opacity: 0.55; cursor: not-allowed;" title="Opens Tuesday 6 AM"><i class="fas fa-clock"></i></span>
                                 {% else %}
