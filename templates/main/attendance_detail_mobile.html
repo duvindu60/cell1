@@ -1129,7 +1129,7 @@ function updateCounts() {
     }
 }
 
-function postVisitorAfterBulkMobile(meetingDate) {
+function postVisitorCountMobile(meetingDate) {
     const el = document.getElementById('visitorCountInput');
     if (!el || el.disabled) return Promise.resolve(null);
     const raw = String(el.value).trim();
@@ -1251,53 +1251,51 @@ window.confirmSubmit = function() {
         
         // Send to server
         const meetingDate = '{{ meeting_date }}';
-        fetch(`/bulk_update_attendance/${encodeURIComponent(meetingDate)}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ attendance: attendance })
-        })
-        .then(response => {
-            console.log('Response status:', response.status);
-            if (!response.ok) {
-                return response.json().then(data => {
-                    throw new Error(data.message || 'Server error');
-                });
-            }
-            return response.json();
-        })
-        .then(data => {
-            console.log('Response data:', data);
-            if (data.success) {
-                const meetingDate = '{{ meeting_date }}';
-                return postVisitorAfterBulkMobile(meetingDate).then(function(extra) {
+        // Save the visitor count BEFORE the bulk submit, because the bulk submit
+        // finalizes (locks) the week. Posting the visitor count after the lock
+        // would be rejected and the count lost.
+        postVisitorCountMobile(meetingDate).then(function(visitorExtra) {
+            fetch(`/bulk_update_attendance/${encodeURIComponent(meetingDate)}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ attendance: attendance })
+            })
+            .then(response => {
+                console.log('Response status:', response.status);
+                if (!response.ok) {
+                    return response.json().then(data => {
+                        throw new Error(data.message || 'Server error');
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Response data:', data);
+                if (data.success) {
                     closeConfirmModal();
                     showFeedback(data.message, 'success');
-                    if (extra && extra.visitorLocked) {
+                    if (visitorExtra && (visitorExtra.visitorLocked || visitorExtra.visitorError)) {
                         setTimeout(function() {
-                            showFeedback(extra.message, 'error');
-                        }, 400);
-                    } else if (extra && extra.visitorError) {
-                        setTimeout(function() {
-                            showFeedback(extra.message, 'error');
+                            showFeedback(visitorExtra.message, 'error');
                         }, 400);
                     }
                     setTimeout(() => {
                         window.location.reload();
                     }, 1500);
-                });
-            } else {
-                showFeedback(data.message || 'Error submitting attendance', 'error');
+                } else {
+                    showFeedback(data.message || 'Error submitting attendance', 'error');
+                    confirmBtn.disabled = false;
+                    confirmBtn.innerHTML = '<i class="fas fa-check"></i><span>Yes, Submit</span>';
+                }
+            })
+            .catch(error => {
+                console.error('Error submitting attendance:', error);
+                showFeedback(error.message || 'Network error. Please try again.', 'error');
                 confirmBtn.disabled = false;
                 confirmBtn.innerHTML = '<i class="fas fa-check"></i><span>Yes, Submit</span>';
-            }
-        })
-        .catch(error => {
-            console.error('Error submitting attendance:', error);
-            showFeedback(error.message || 'Network error. Please try again.', 'error');
-            confirmBtn.disabled = false;
-            confirmBtn.innerHTML = '<i class="fas fa-check"></i><span>Yes, Submit</span>';
+            });
         });
     } catch (error) {
         console.error('Error in confirmSubmit:', error);
