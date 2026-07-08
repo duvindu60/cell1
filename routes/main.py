@@ -1024,6 +1024,82 @@ def enrich_meetings_with_attendance_eligibility(meetings, leader_id):
         m['locked_reason'] = st['locked_reason']
 
 
+def enrich_meetings_with_attendance_summary(meetings, leader_id):
+    """
+    Add present_count, absent_count and visitor_count per meeting so cards can
+    show a submitted-attendance summary. Batched to avoid per-meeting queries.
+    """
+    if not meetings:
+        return
+    for m in meetings:
+        m.setdefault('present_count', 0)
+        m.setdefault('absent_count', 0)
+        m.setdefault('visitor_count', 0)
+        m.setdefault('has_attendance_summary', False)
+    if not supabase or not leader_id:
+        return
+
+    isos = list({m['date_iso'] for m in meetings if m.get('date_iso')})
+    if not isos:
+        return
+
+    present_by = {}
+    absent_by = {}
+    try:
+        att_res = (
+            supabase.table('attendance')
+            .select('meeting_date,status')
+            .eq('leader_id', str(leader_id))
+            .in_('meeting_date', isos)
+            .execute()
+        )
+        for row in att_res.data or []:
+            iso = _normalize_meeting_date_iso_from_db(row.get('meeting_date'))
+            if not iso:
+                continue
+            status = row.get('status')
+            if status == 'present':
+                present_by[iso] = present_by.get(iso, 0) + 1
+            elif status == 'absent':
+                absent_by[iso] = absent_by.get(iso, 0) + 1
+    except Exception as e:
+        print(f"enrich_meetings_with_attendance_summary attendance: {e}")
+
+    visitor_by = {}
+    try:
+        vc_res = (
+            supabase.table(ATTENDANCE_VISITOR_COUNTS_TABLE)
+            .select('meeting_date,visitor_count')
+            .eq('leader_user_id', str(leader_id))
+            .in_('meeting_date', isos)
+            .execute()
+        )
+        for row in vc_res.data or []:
+            iso = _normalize_meeting_date_iso_from_db(row.get('meeting_date'))
+            if not iso:
+                continue
+            try:
+                visitor_by[iso] = int(row.get('visitor_count') or 0)
+            except (TypeError, ValueError):
+                visitor_by[iso] = 0
+    except Exception as e:
+        print(f"enrich_meetings_with_attendance_summary visitors: {e}")
+
+    for m in meetings:
+        iso = m.get('date_iso')
+        if not iso:
+            continue
+        m['present_count'] = present_by.get(iso, 0)
+        m['absent_count'] = absent_by.get(iso, 0)
+        m['visitor_count'] = visitor_by.get(iso, 0)
+        m['has_attendance_summary'] = (
+            bool(m.get('attendance_submitted'))
+            or iso in present_by
+            or iso in absent_by
+            or iso in visitor_by
+        )
+
+
 def get_attendance_reminder_info(meeting_date):
     """
     Get reminder information for attendance deadline.
@@ -1693,6 +1769,7 @@ def meeting_dates():
                 meeting['is_upcoming'] = False
 
         enrich_meetings_with_attendance_eligibility(meetings, leader_id)
+        enrich_meetings_with_attendance_summary(meetings, leader_id)
 
         print(f"DEBUG: Final meetings count: {len(meetings)}")
         for i, meeting in enumerate(meetings, 1):
@@ -1738,6 +1815,7 @@ def meeting_dates():
                 meeting['is_upcoming'] = False
 
         enrich_meetings_with_attendance_eligibility(meetings, leader_id)
+        enrich_meetings_with_attendance_summary(meetings, leader_id)
 
         template_name = f'main/meeting_dates{get_template_suffix()}.html'
         return render_template(template_name, 
