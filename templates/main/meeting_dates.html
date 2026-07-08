@@ -449,6 +449,56 @@ body {
     flex-shrink: 0;
 }
 
+/* Submitted attendance summary chips */
+.attendance-summary-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.85rem;
+}
+
+.summary-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.8rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.01em;
+    border: 1px solid transparent;
+    background: rgba(148, 163, 184, 0.12);
+    white-space: nowrap;
+}
+
+.summary-chip i {
+    font-size: 0.85rem;
+}
+
+.summary-chip .summary-chip__value {
+    font-weight: 800;
+    font-size: 0.95rem;
+}
+
+.summary-chip--present {
+    color: #34d399;
+    background: rgba(16, 185, 129, 0.13);
+    border-color: rgba(16, 185, 129, 0.35);
+}
+
+.summary-chip--absent {
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.13);
+    border-color: rgba(239, 68, 68, 0.35);
+}
+
+.summary-chip--visitor {
+    color: #60a5fa;
+    background: rgba(59, 130, 246, 0.13);
+    border-color: rgba(59, 130, 246, 0.35);
+}
+
 .action-btn {
     display: flex;
     align-items: center;
@@ -773,10 +823,19 @@ body {
                                             <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">{{ meeting.description }}</p>
                                             {% endif %}
                                             {% if meeting.attendance_submitted %}
-                                            <div class="attendance-summary-stats" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 0.75rem; font-size: 0.875rem; font-weight: 600;">
-                                                <span style="color: #10b981;"><i class="fas fa-check-circle"></i> {{ meeting.present_count }} Present</span>
-                                                <span style="color: #ef4444;"><i class="fas fa-times-circle"></i> {{ meeting.absent_count }} Absent</span>
-                                                <span style="color: #3b82f6;"><i class="fas fa-user-friends"></i> {{ meeting.visitor_count }} Visitors</span>
+                                            <div class="attendance-summary-stats">
+                                                <span class="summary-chip summary-chip--present">
+                                                    <i class="fas fa-check-circle"></i>
+                                                    <span class="summary-chip__value">{{ meeting.present_count }}</span> Present
+                                                </span>
+                                                <span class="summary-chip summary-chip--absent">
+                                                    <i class="fas fa-times-circle"></i>
+                                                    <span class="summary-chip__value">{{ meeting.absent_count }}</span> Absent
+                                                </span>
+                                                <span class="summary-chip summary-chip--visitor">
+                                                    <i class="fas fa-user-friends"></i>
+                                                    <span class="summary-chip__value">{{ meeting.visitor_count }}</span> Visitors
+                                                </span>
                                             </div>
                                             {% endif %}
                                         </div>
