@@ -729,8 +729,8 @@ def get_attendance_meeting_date_corrected():
 
 
 def get_attendance_opening_datetime(meeting_date):
-    """First moment attendance may be marked for meeting_date (Tuesday): Tue 17:00:00 local."""
-    return datetime.combine(meeting_date, time(17, 0, 0), tzinfo=get_app_tz())
+    """First moment attendance may be marked for meeting_date (Tuesday): Tue 06:00:00 local."""
+    return datetime.combine(meeting_date, time(6, 0, 0), tzinfo=get_app_tz())
 
 
 def get_attendance_deadline(meeting_date):
@@ -751,9 +751,42 @@ def get_attendance_deadline(meeting_date):
     return deadline
 
 
+def get_member_attendance_cutoff_iso(meeting_date):
+    """
+    Members created up to the END of the meeting week (Thursday 23:59:59 local)
+    are eligible for that week's attendance. This lets members added during the
+    marking window (including same-day Tuesday adds) be marked present.
+
+    Returns a timezone-aware ISO timestamp string for use in a Supabase
+    .lte('created_at', ...) filter. Using an end-of-day timestamp avoids the
+    bug where a bare date ('YYYY-MM-DD') is treated as midnight, which wrongly
+    excluded members created later that same day.
+    """
+    return get_attendance_deadline(meeting_date).isoformat()
+
+
+def get_member_attendance_cutoff_date(meeting_date):
+    """Date form of the eligibility cutoff (the meeting week's Thursday)."""
+    return get_attendance_deadline(meeting_date).date()
+
+
+def member_created_within_attendance_window(member_created_at, meeting_date):
+    """
+    True if a member (by created_at) is eligible for meeting_date's attendance.
+    Eligible when created on or before the meeting week's Thursday. Members with
+    no created_at are included for backward compatibility.
+    """
+    if not member_created_at:
+        return True
+    created_date = _parse_created_at_to_date(member_created_at)
+    if created_date is None:
+        return True
+    return created_date <= get_member_attendance_cutoff_date(meeting_date)
+
+
 def get_attendance_marking_countdown_payload(meeting_date):
     """
-    ISO timestamps for dashboard countdown: marking opens Tue 17:00 local,
+    ISO timestamps for dashboard countdown: marking opens Tue 06:00 local,
     closes Thursday 23:59:59 local (same as get_attendance_deadline).
     If that window has already ended, rolls forward to the next Tuesday's window
     so the UI always shows an upcoming open/close pair.
@@ -777,7 +810,7 @@ def get_attendance_marking_countdown_payload(meeting_date):
 def can_mark_attendance(meeting_date):
     """
     Check if attendance can be marked for a given meeting date.
-    Window: Tuesday 17:00 through Thursday 23:59:59 local (meeting_date is Tuesday).
+    Window: Tuesday 06:00 through Thursday 23:59:59 local (meeting_date is Tuesday).
 
     Args:
         meeting_date: datetime.date object representing the Tuesday meeting date
@@ -898,13 +931,13 @@ def attendance_edit_denied_message(parsed_date, submitted_iso_set):
             'Attendance has already been submitted for this meeting and cannot be changed.'
         )
     if lr == 'upcoming':
-        return 'Attendance opens during the meeting week (Tuesday 5:00 PM through Thursday 11:59 PM).'
+        return 'Attendance opens during the meeting week (Tuesday 6:00 AM through Thursday 11:59 PM).'
     if lr == 'window_not_open':
-        return 'Attendance opens Tuesday at 5:00 PM.'
+        return 'Attendance opens Tuesday at 6:00 AM.'
     reminder_info = get_attendance_reminder_info(parsed_date)
     deadline_str = reminder_info['deadline_str'] if reminder_info else 'Thursday 11:59 PM'
     return (
-        f'Attendance can only be marked from Tuesday 5:00 PM through {deadline_str}. '
+        f'Attendance can only be marked from Tuesday 6:00 AM through {deadline_str}. '
         f'This week\'s attendance is now closed.'
     )
 
@@ -918,42 +951,16 @@ def get_attendance_eligible_member_id_strings(leader_id, parsed_date, meeting_da
         return set()
     query = supabase.table('cell_members').select('*').eq('leader_id', leader_id)
     if parsed_date:
-        query = query.lte('created_at', meeting_date_formatted)
+        # Use end-of-window (Thursday 23:59:59) timestamp, not a bare date, so
+        # members added during the marking window are not dropped at the DB layer.
+        query = query.lte('created_at', get_member_attendance_cutoff_iso(parsed_date))
     members_result = query.execute()
     members = members_result.data if members_result.data else []
     if parsed_date and members:
-        filtered_members = []
-        for member in members:
-            member_created_at = member.get('created_at')
-            if member_created_at:
-                try:
-                    if isinstance(member_created_at, str):
-                        try:
-                            member_created = datetime.fromisoformat(
-                                member_created_at.replace('Z', '+00:00')
-                            ).date()
-                        except ValueError:
-                            try:
-                                member_created = datetime.strptime(
-                                    member_created_at, '%Y-%m-%dT%H:%M:%S.%f'
-                                ).date()
-                            except ValueError:
-                                member_created = datetime.strptime(
-                                    member_created_at.split('T')[0], '%Y-%m-%d'
-                                ).date()
-                    else:
-                        member_created = (
-                            member_created_at.date()
-                            if hasattr(member_created_at, 'date')
-                            else member_created_at
-                        )
-                    if member_created <= parsed_date:
-                        filtered_members.append(member)
-                except Exception:
-                    filtered_members.append(member)
-            else:
-                filtered_members.append(member)
-        members = filtered_members
+        members = [
+            member for member in members
+            if member_created_within_attendance_window(member.get('created_at'), parsed_date)
+        ]
     out = set()
     for m in members:
         mid = m.get('id')
@@ -1244,13 +1251,17 @@ def index():
         try:
             current_tuesday_str = current_attendance_date.strftime("%B %d, %Y")
 
-            query = supabase.table('cell_members').select('id').eq('leader_id', leader_id)
-            query = query.lte('created_at', current_attendance_date.isoformat())
+            query = supabase.table('cell_members').select('id,created_at').eq('leader_id', leader_id)
+            query = query.lte('created_at', get_member_attendance_cutoff_iso(current_attendance_date))
             members_result = query.execute()
-            total_members = len(members_result.data) if members_result.data else 0
+            eligible_members = [
+                m for m in (members_result.data or [])
+                if member_created_within_attendance_window(m.get('created_at'), current_attendance_date)
+            ]
+            total_members = len(eligible_members)
 
             if total_members > 0:
-                member_ids = [member['id'] for member in members_result.data]
+                member_ids = [member['id'] for member in eligible_members]
                 attendance_result = supabase.table('attendance')\
                     .select('member_id')\
                     .eq('leader_id', leader_id)\
@@ -1315,8 +1326,7 @@ def index():
                         mid = m.get('id')
                         if not mid:
                             continue
-                        c_d = _parse_created_at_to_date(m.get('created_at'))
-                        if c_d is None or c_d <= parsed_date:
+                        if member_created_within_attendance_window(m.get('created_at'), parsed_date):
                             valid_ids.add(mid)
                     meeting_total_members = len(valid_ids)
                     raw_marks = set(att_by_meeting.get(meeting_date_iso, set()))
@@ -1757,49 +1767,26 @@ def attendance_detail(meeting_date):
             except ValueError:
                 parsed_date = None
         
-        # Get members for this leader, filtered by created_at <= meeting_date
-        # Only show members who were created on or before this meeting date
+        # Get members eligible for this meeting week. A member is eligible if they
+        # were created on or before the END of the marking window (Thursday
+        # 23:59:59 local), so members added during the window (including same-day
+        # Tuesday adds) appear here and can be marked present.
         query = supabase.table('cell_members').select('*').eq('leader_id', leader_id)
-        
-        # Filter members created on or before the meeting date
+
+        # Filter at the DB layer using an end-of-window timestamp (not a bare date,
+        # which would be treated as midnight and drop in-window adds).
         if parsed_date:
-            query = query.lte('created_at', meeting_date_formatted)
-            print(f"DEBUG: Filtering members where created_at <= {meeting_date_formatted}")
-        
+            query = query.lte('created_at', get_member_attendance_cutoff_iso(parsed_date))
+
         members_result = query.execute()
         members = members_result.data if members_result.data else []
-        
-        # Additional safety check: filter out members created after meeting date
+
+        # Safety net: apply the same eligibility rule in Python.
         if parsed_date and members:
-            filtered_members = []
-            for member in members:
-                member_created_at = member.get('created_at')
-                if member_created_at:
-                    try:
-                        # Parse member's created_at
-                        if isinstance(member_created_at, str):
-                            try:
-                                member_created = datetime.fromisoformat(member_created_at.replace('Z', '+00:00')).date()
-                            except ValueError:
-                                try:
-                                    member_created = datetime.strptime(member_created_at, "%Y-%m-%dT%H:%M:%S.%f").date()
-                                except ValueError:
-                                    member_created = datetime.strptime(member_created_at.split('T')[0], "%Y-%m-%d").date()
-                        else:
-                            member_created = member_created_at.date() if hasattr(member_created_at, 'date') else member_created_at
-                        
-                        # Only include members created on or before meeting date
-                        if member_created <= parsed_date:
-                            filtered_members.append(member)
-                        else:
-                            print(f"DEBUG: Skipping member {member.get('id')} - created {member_created} after meeting {parsed_date}")
-                    except Exception as e:
-                        print(f"Error parsing member created_at: {e}, including member anyway")
-                        filtered_members.append(member)
-                else:
-                    # If member has no created_at, include it for backward compatibility
-                    filtered_members.append(member)
-            members = filtered_members
+            members = [
+                member for member in members
+                if member_created_within_attendance_window(member.get('created_at'), parsed_date)
+            ]
 
         # Show the leader's own self-row first so it's prominent on the attendance page.
         members.sort(key=lambda m: (0 if m.get('is_leader') else 1, (m.get('name') or '').lower()))
@@ -1980,26 +1967,12 @@ def update_attendance(meeting_date):
             member_name = member.get('name', 'Unknown')
             member_created_at = member.get('created_at')
             
-            # Validate member was created on or before meeting date
+            # Validate the member is eligible for this meeting week. Eligible when
+            # created on or before the end of the marking window (that week's
+            # Thursday), so members added during the window can be marked.
             if parsed_date and member_created_at:
-                try:
-                    # Parse member's created_at
-                    if isinstance(member_created_at, str):
-                        try:
-                            member_created = datetime.fromisoformat(member_created_at.replace('Z', '+00:00')).date()
-                        except ValueError:
-                            try:
-                                member_created = datetime.strptime(member_created_at, "%Y-%m-%dT%H:%M:%S.%f").date()
-                            except ValueError:
-                                member_created = datetime.strptime(member_created_at.split('T')[0], "%Y-%m-%d").date()
-                    else:
-                        member_created = member_created_at.date() if hasattr(member_created_at, 'date') else member_created_at
-                    
-                    # Check if member was created after meeting date
-                    if member_created > parsed_date:
-                        return jsonify({'success': False, 'message': f'Cannot mark attendance: This member was created after the meeting date ({meeting_date})'}), 403
-                except Exception as date_error:
-                    print(f"Error validating member created_at: {date_error}, allowing update")
+                if not member_created_within_attendance_window(member_created_at, parsed_date):
+                    return jsonify({'success': False, 'message': f'Cannot mark attendance: This member was added after the meeting week ({meeting_date})'}), 403
         except Exception as e:
             print(f"Error fetching member info: {e}")
             return jsonify({'success': False, 'message': 'Error fetching member information'}), 500
@@ -2191,30 +2164,17 @@ def bulk_update_attendance(meeting_date):
 
         for member_id, status in payload_by_id.items():
 
-            # Validate member was created on or before meeting date
+            # Validate the member is eligible for this meeting week (created on or
+            # before the end of the marking window, i.e. that week's Thursday).
             if parsed_date:
                 try:
                     member_result = supabase.table('cell_members').select('created_at').eq('id', member_id).eq('leader_id', leader_id).execute()
                     if member_result.data and len(member_result.data) > 0:
                         member_created_at = member_result.data[0].get('created_at')
-                        if member_created_at:
-                            # Parse member's created_at
-                            if isinstance(member_created_at, str):
-                                try:
-                                    member_created = datetime.fromisoformat(member_created_at.replace('Z', '+00:00')).date()
-                                except ValueError:
-                                    try:
-                                        member_created = datetime.strptime(member_created_at, "%Y-%m-%dT%H:%M:%S.%f").date()
-                                    except ValueError:
-                                        member_created = datetime.strptime(member_created_at.split('T')[0], "%Y-%m-%d").date()
-                            else:
-                                member_created = member_created_at.date() if hasattr(member_created_at, 'date') else member_created_at
-                            
-                            # Skip members created after meeting date
-                            if member_created > parsed_date:
-                                error_count += 1
-                                errors.append(f"Member {member_id}: Created after meeting date")
-                                continue
+                        if not member_created_within_attendance_window(member_created_at, parsed_date):
+                            error_count += 1
+                            errors.append(f"Member {member_id}: Added after meeting week")
+                            continue
                 except Exception as validation_error:
                     print(f"Error validating member {member_id}: {validation_error}, allowing update")
             
@@ -3267,11 +3227,15 @@ def attendance_list():
                     meeting_date_str = parsed_date.strftime("%B %d, %Y")
                     meeting_date_iso = parsed_date.isoformat()
                     
-                    # Get members for this meeting date (only those created on or before this meeting)
-                    meeting_members_query = supabase.table('cell_members').select('id').eq('leader_id', leader_id)
-                    meeting_members_query = meeting_members_query.lte('created_at', meeting_date_iso)
+                    # Get members eligible for this meeting week (created on or before
+                    # the end of the marking window, i.e. that week's Thursday).
+                    meeting_members_query = supabase.table('cell_members').select('id,created_at').eq('leader_id', leader_id)
+                    meeting_members_query = meeting_members_query.lte('created_at', get_member_attendance_cutoff_iso(parsed_date))
                     meeting_members_result = meeting_members_query.execute()
-                    meeting_member_ids = [member['id'] for member in meeting_members_result.data] if meeting_members_result.data else []
+                    meeting_member_ids = [
+                        member['id'] for member in (meeting_members_result.data or [])
+                        if member_created_within_attendance_window(member.get('created_at'), parsed_date)
+                    ]
                     meeting_total_members = len(meeting_member_ids)
                     
                     # Get attendance records for this meeting
