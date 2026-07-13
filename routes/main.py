@@ -12,6 +12,9 @@ from utils.leaderboard_snapshot_query import query_with_fallback_filters, SNAPSH
 from utils.tutorials_access import (
     build_weekly_tutorial_dashboard_rows,
     fetch_leader_cell_category,
+    format_tutorial_section_heading,
+    tutorial_row_raw_title,
+    usable_custom_tutorial_title,
 )
 from utils.app_time import app_now, app_today, get_app_tz
 # Load environment variables
@@ -326,8 +329,8 @@ def build_tutorial_language_blocks(rows):
         row = meta_row[i]
         if row is None:
             row = {}
-        base = row.get('tutorial_name') or row.get('title') or 'Tutorial'
-        desc_fb = base if base != 'Tutorial' else None
+        # Never use legacy "Tutorial PDF (Tamil)…" titles as card description text
+        desc_fb = usable_custom_tutorial_title(tutorial_row_raw_title(row))
 
         pdf_entry = None
         if pdf_u:
@@ -361,7 +364,10 @@ def build_tutorial_legacy_sections(rows):
     for row in rows or []:
         if not isinstance(row, dict):
             continue
-        base = row.get('tutorial_name') or row.get('title') or 'Tutorial'
+        base = (
+            usable_custom_tutorial_title(tutorial_row_raw_title(row))
+            or 'Weekly Meeting'
+        )
         seen_any_numbered = set()
         for i in (1, 2, 3):
             u = _str_url(row.get(f'pdf_url_{i}'))
@@ -1295,7 +1301,16 @@ def index():
                         'is_placeholder': is_placeholder_tutorial,
                         'is_upcoming': is_upcoming,
                         'status': 'updated' if has_tutorial and not is_placeholder_tutorial else 'not_updated',
-                        'tutorial_name': tutorial_record.get('title', 'No Tutorial') if has_tutorial else None,
+                        # List cards already show the date above — omit it here to avoid duplication
+                        'tutorial_name': (
+                            format_tutorial_section_heading(
+                                parsed_date,
+                                include_date=False,
+                                raw_title=tutorial_row_raw_title(tutorial_record),
+                            )
+                            if has_tutorial
+                            else None
+                        ),
                         'description': tutorial_record.get('description', '') if has_tutorial else None,
                         'sort_date': parsed_date
                     })
@@ -3204,7 +3219,16 @@ def tutorials_list():
                         'is_placeholder': is_placeholder_tutorial,
                         'is_upcoming': is_upcoming,
                         'status': 'updated' if has_tutorial and not is_placeholder_tutorial else 'not_updated',
-                        'tutorial_name': tutorial_record.get('title', 'No Tutorial') if has_tutorial else None,
+                        # List cards already show the date above — omit it here to avoid duplication
+                        'tutorial_name': (
+                            format_tutorial_section_heading(
+                                parsed_date,
+                                include_date=False,
+                                raw_title=tutorial_row_raw_title(tutorial_record),
+                            )
+                            if has_tutorial
+                            else None
+                        ),
                         'description': tutorial_record.get('description', '') if has_tutorial else None,
                         'sort_date': parsed_date  # Add sort_date for sorting
                     })

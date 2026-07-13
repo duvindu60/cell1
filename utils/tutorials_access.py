@@ -1,5 +1,21 @@
 """Filter tutorials by leader users.cell_category — shared by routes and API."""
+import re
 from datetime import date, datetime
+
+# Legacy single-resource titles, e.g. "Tutorial PDF (Tamil) — Weekly Meeting - July 14, 2026"
+_LEGACY_RESOURCE_TITLE_RE = re.compile(
+    r'(?i)^\s*tutorial\s+(pdf|video)\b'
+)
+# Generic weekly labels we rebuild ourselves (with consistent date formatting)
+_GENERIC_WEEKLY_TITLE_RE = re.compile(
+    r'(?i)^\s*weekly\s+meeting(\b|[\s\-—–:].*)?$'
+)
+_PLACEHOLDER_TITLES = frozenset({
+    '',
+    'tutorial',
+    'no tutorial',
+    'no tutorial uploaded',
+})
 
 
 def parse_tutorial_meeting_date(meeting_date):
@@ -28,6 +44,59 @@ def str_url(val):
     if val is None:
         return ''
     return str(val).strip()
+
+
+def is_legacy_tutorial_resource_title(title):
+    """True for old single PDF/video titles that should not be shown as section headings."""
+    if title is None:
+        return False
+    s = str(title).strip()
+    if not s:
+        return False
+    return bool(_LEGACY_RESOURCE_TITLE_RE.match(s))
+
+
+def usable_custom_tutorial_title(title):
+    """
+    Return a stripped custom title worth showing, or None.
+    Skips placeholders, legacy "Tutorial PDF/Video (...)" names, and generic Weekly Meeting labels.
+    """
+    if title is None:
+        return None
+    s = str(title).strip()
+    if not s:
+        return None
+    if s.lower() in _PLACEHOLDER_TITLES:
+        return None
+    if is_legacy_tutorial_resource_title(s):
+        return None
+    if _GENERIC_WEEKLY_TITLE_RE.match(s):
+        return None
+    return s
+
+
+def format_tutorial_section_heading(meeting_date, *, include_date=True, raw_title=None):
+    """
+    Clean section heading for tutorial list cards and language-chip panels.
+
+    Prefer a real custom title when present; otherwise "Weekly Meeting"
+    (optionally with meeting date). Never surfaces legacy resource titles.
+    """
+    custom = usable_custom_tutorial_title(raw_title)
+    if custom:
+        return custom
+
+    pd = meeting_date if isinstance(meeting_date, date) and not isinstance(meeting_date, datetime) else parse_tutorial_meeting_date(meeting_date)
+    if include_date and pd:
+        return f"Weekly Meeting — {pd.strftime('%B %d, %Y')}"
+    return 'Weekly Meeting'
+
+
+def tutorial_row_raw_title(row):
+    """Best raw title field from a tutorials row (does not clean)."""
+    if not isinstance(row, dict):
+        return None
+    return row.get('title') or row.get('tutorial_name')
 
 
 def sinhala_pdf_url(row):
@@ -104,16 +173,11 @@ def build_weekly_tutorial_dashboard_rows(tutorial_rows):
         pd = parse_tutorial_meeting_date(row.get('meeting_date'))
         date_str = pd.strftime("%B %d, %Y") if pd else None
 
-        title = row.get('title') or row.get('tutorial_name')
-        heading = str(title).strip() if title and str(title).strip() else None
-        if not heading:
-            parts = []
-            if pd:
-                parts.append(pd.strftime("%B %d, %Y"))
-            mn = row.get('meeting_number')
-            if mn is not None and str(mn).strip() != '':
-                parts.append(f"Meeting {mn}")
-            heading = ' · '.join(parts) if parts else (date_str or 'Tutorial')
+        heading = format_tutorial_section_heading(
+            pd,
+            include_date=True,
+            raw_title=tutorial_row_raw_title(row),
+        )
 
         slots = [
             {'label': 'Sinhala', 'pdf': sinhala_pdf_url(row) or None, 'video': sinhala_video_url(row) or None},
