@@ -91,12 +91,15 @@
                 {% endif %}
             </div>
             
-            <!-- Zone - Dropdown from zones table -->
+            <!-- Zone - Required when leader branch is Miracle Dome -->
+            {% set zone_is_required = zone_required if zone_required is defined else ('miracle dome' in ((leader_branch_name or '')|lower)) %}
             <div class="form-group">
                 <label for="zone_id" class="form-label">
-                    <i class="fas fa-map-marker-alt"></i>Zone
+                    <i class="fas fa-map-marker-alt"></i>Zone{% if zone_is_required %} <span class="required">*</span>{% endif %}
                 </label>
-                <select id="zone_id" name="zone_id" class="form-select">
+                <select id="zone_id" name="zone_id" class="form-select"
+                        {% if zone_is_required %}required{% endif %}
+                        data-zone-required="{{ '1' if zone_is_required else '0' }}">
                     <option value="">Select zone</option>
                     {% if zones %}
                         {% for zone in zones %}
@@ -108,7 +111,10 @@
                         {% endfor %}
                     {% endif %}
                 </select>
-                <div class="form-help">Optional - Select zone</div>
+                <div class="form-help">{% if zone_is_required %}Required for Miracle Dome branch{% else %}Optional - Select zone{% endif %}</div>
+                {% if form_errors and 'zone_id' in form_errors %}
+                    <div class="form-error">{{ form_errors.zone_id }}</div>
+                {% endif %}
             </div>
 
             <!-- Sector Number - Auto-filled from Zone -->
@@ -193,15 +199,18 @@
             <!-- Cell Category - Required Field -->
             <div class="form-group">
                 <label for="cell_category" class="form-label">
-                    <i class="fas fa-users"></i>Cell Category
+                    <i class="fas fa-users"></i>Cell Category <span class="required">*</span>
                 </label>
-                <select id="cell_category" name="cell_category" class="form-select">
+                <select id="cell_category" name="cell_category" class="form-select" required>
                     <option value="">Select cell category</option>
                     <option value="youth" {{ 'selected' if request.form.cell_category == 'youth' or (member and member.cell_category == 'youth') else '' }}>Youth</option>
                     <option value="young adult" {{ 'selected' if request.form.cell_category == 'young adult' or (member and member.cell_category == 'young adult') else '' }}>Young Adult</option>
                     <option value="adult" {{ 'selected' if request.form.cell_category == 'adult' or (member and member.cell_category == 'adult') else '' }}>Adult</option>
                 </select>
-                <div class="form-help">Select cell category</div>
+                <div class="form-help">Required - Select cell category</div>
+                {% if form_errors and 'cell_category' in form_errors %}
+                    <div class="form-error">{{ form_errors.cell_category }}</div>
+                {% endif %}
             </div>
 
             <!-- Church - Boolean Checkbox -->
@@ -571,6 +580,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 e.preventDefault();
                 alert('Please enter a valid phone number (10-15 digits).');
                 document.getElementById('phone_number').focus();
+                return;
+            }
+
+            const cellCategory = document.getElementById('cell_category');
+            if (cellCategory && !cellCategory.value) {
+                e.preventDefault();
+                alert('Please select a cell category.');
+                cellCategory.focus();
+                return;
+            }
+
+            const zoneField = document.getElementById('zone_id');
+            if (zoneField && zoneField.getAttribute('data-zone-required') === '1' && !zoneField.value) {
+                e.preventDefault();
+                alert('Please select a zone (required for Miracle Dome branch).');
+                zoneField.focus();
                 return;
             }
             

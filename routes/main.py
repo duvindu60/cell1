@@ -149,6 +149,29 @@ def get_leader_location_context(leader_id):
     return leader_branch_id, leader_country, leader_branch_name
 
 
+ALLOWED_MEMBER_CELL_CATEGORIES = frozenset({'youth', 'young adult', 'adult'})
+
+
+def is_miracle_dome_branch(branch_name):
+    """True when leader branch is Miracle Dome (zone then required on member form)."""
+    if not branch_name:
+        return False
+    normalized = re.sub(r'\s+', ' ', str(branch_name).strip().lower())
+    return 'miracle dome' in normalized
+
+
+def validate_member_form_required_fields(form_errors, *, cell_category, zone_id_raw, branch_name):
+    """Require cell category always; require zone when branch is Miracle Dome."""
+    cat = (cell_category or '').strip()
+    if not cat:
+        form_errors['cell_category'] = 'Cell category is required'
+    elif cat not in ALLOWED_MEMBER_CELL_CATEGORIES:
+        form_errors['cell_category'] = 'Please select a valid cell category'
+
+    if is_miracle_dome_branch(branch_name) and not (zone_id_raw or '').strip():
+        form_errors['zone_id'] = 'Zone is required for Miracle Dome branch'
+
+
 def _tutorial_resource_url(tutorial):
     """First non-empty URL on a tutorial row (legacy helpers / dashboards)."""
     if not tutorial or not isinstance(tutorial, dict):
@@ -2577,6 +2600,7 @@ def member_form():
                          leader_branch_id=leader_branch_id,
                          leader_branch_name=leader_branch_name,
                          leader_country=leader_country,
+                         zone_required=is_miracle_dome_branch(leader_branch_name),
                          zones=zones)
 @main_bp.route('/member/<member_id>')
 def member_details(member_id):
@@ -2645,6 +2669,12 @@ def add_member():
     name = request.form.get('name', '').strip()
     age = request.form.get('age', '').strip()
     phone_number = request.form.get('phone_number', '').strip()
+    cell_category = request.form.get('cell_category', '').strip()
+    zone_id_raw = request.form.get('zone_id', '').strip()
+
+    leader_id = get_effective_leader_id()
+    leader_branch_id, leader_country, leader_branch_name = get_leader_location_context(leader_id)
+
     # Validate required fields
     if not name:
         form_errors['name'] = 'Full name is required'
@@ -2661,12 +2691,16 @@ def add_member():
     # Validate phone number if provided
     if phone_number and not re.match(r'^[0-9]{10,15}$', phone_number):
         form_errors['phone_number'] = 'Phone number must be 10-15 digits'
+
+    validate_member_form_required_fields(
+        form_errors,
+        cell_category=cell_category,
+        zone_id_raw=zone_id_raw,
+        branch_name=leader_branch_name,
+    )
+
     # If there are validation errors, return to form with errors
     if form_errors:
-        # Get leader location context for autofill
-        leader_id = get_effective_leader_id()
-        leader_branch_id, leader_country, leader_branch_name = get_leader_location_context(leader_id)
-        
         # Fetch zones for error case with sector_number from sectors table
         zones = []
         try:
@@ -2695,23 +2729,19 @@ def add_member():
                              leader_branch_id=leader_branch_id,
                              leader_branch_name=leader_branch_name,
                              leader_country=leader_country,
+                             zone_required=is_miracle_dome_branch(leader_branch_name),
                              zones=zones)
     try:
         # Use the user ID directly as leader_id (since role_id = 4 users ARE leaders)
-        leader_id = get_effective_leader_id()
-        
-        # Get leader location context for autofill
-        leader_branch_id, leader_country, leader_branch_name = get_leader_location_context(leader_id)
         
         # Get form values or use leader's values for autofill
         country = request.form.get('country') or leader_country
         branch_id = request.form.get('branch_id') or leader_branch_id
-        cell_category = request.form.get('cell_category') or None
         church = request.form.get('church') == 'true'  # Convert checkbox to boolean
         potential_leader = request.form.get('potential_leader') == 'true'  # Convert checkbox to boolean
         
         # Get zone_id and sector_number - convert empty strings to None
-        zone_id = request.form.get('zone_id', '').strip()
+        zone_id = zone_id_raw
         if zone_id:
             try:
                 zone_id = int(zone_id)
@@ -2739,7 +2769,7 @@ def add_member():
             'zone_id': zone_id,
             'country': country,
             'branch_id': branch_id,
-            'cell_category': cell_category,
+            'cell_category': cell_category or None,
             'church': church,
             'potential_leader': potential_leader,
             'sector_number': sector_number,
@@ -2800,6 +2830,7 @@ def add_member():
                                  leader_branch_id=leader_branch_id,
                                  leader_branch_name=leader_branch_name,
                                  leader_country=leader_country,
+                                 zone_required=is_miracle_dome_branch(leader_branch_name),
                                  zones=zones)
     except Exception as e:
         error_msg = str(e)
@@ -2836,6 +2867,7 @@ def add_member():
                              leader_branch_id=leader_branch_id,
                              leader_branch_name=leader_branch_name,
                              leader_country=leader_country,
+                             zone_required=is_miracle_dome_branch(leader_branch_name),
                              zones=zones)
 @main_bp.route('/update_member/<member_id>', methods=['POST'])
 def update_member(member_id):
@@ -2844,27 +2876,98 @@ def update_member(member_id):
     try:
         # Use the user ID directly as leader_id
         leader_id = get_effective_leader_id()
-        
-        # Get leader's branch_id and country for autofill
-        leader_branch_id = None
-        leader_country = None
-        try:
-            user_result = supabase.table('users').select('branch_id, country').eq('id', leader_id).execute()
-            if user_result.data and len(user_result.data) > 0:
-                leader_branch_id = user_result.data[0].get('branch_id')
-                leader_country = user_result.data[0].get('country')
-        except Exception as e:
-            print(f"Error fetching leader's branch_id and country: {e}")
+        leader_branch_id, leader_country, leader_branch_name = get_leader_location_context(leader_id)
+
+        name = (request.form.get('name') or '').strip()
+        age = (request.form.get('age') or '').strip()
+        phone_number = (request.form.get('phone_number') or '').strip()
+        cell_category = (request.form.get('cell_category') or '').strip()
+        zone_id_raw = (request.form.get('zone_id') or '').strip()
+
+        form_errors = {}
+        if not name:
+            form_errors['name'] = 'Full name is required'
+        elif not re.match(r'^[A-Za-z\s]{2,100}$', name):
+            form_errors['name'] = 'Name must be 2-100 characters and contain only letters and spaces'
+        if age:
+            try:
+                age_int = int(age)
+                if age_int < 1 or age_int > 120:
+                    form_errors['age'] = 'Age must be between 1 and 120'
+            except ValueError:
+                form_errors['age'] = 'Age must be a valid number'
+        if phone_number and not re.match(r'^[0-9]{10,15}$', phone_number):
+            form_errors['phone_number'] = 'Phone number must be 10-15 digits'
+
+        validate_member_form_required_fields(
+            form_errors,
+            cell_category=cell_category,
+            zone_id_raw=zone_id_raw,
+            branch_name=leader_branch_name,
+        )
+
+        if form_errors:
+            zones = []
+            try:
+                zones_result = supabase.table('zones').select('*').order('id').execute()
+                if zones_result.data:
+                    for zone in zones_result.data:
+                        sector_number = None
+                        if zone.get('sector_id'):
+                            try:
+                                sector_result = (
+                                    supabase.table('sectors')
+                                    .select('sector_number')
+                                    .eq('id', zone['sector_id'])
+                                    .limit(1)
+                                    .execute()
+                                )
+                                if sector_result.data and len(sector_result.data) > 0:
+                                    sector_number = sector_result.data[0].get('sector_number')
+                            except Exception as e:
+                                print(f"Error fetching sector for zone {zone.get('id')}: {e}")
+                        zone['sector_number'] = sector_number
+                        zones.append(zone)
+            except Exception as e:
+                print(f"Error fetching zones: {e}")
+
+            member = {
+                'id': member_id,
+                'name': name,
+                'age': age,
+                'phone_number': phone_number,
+                'gender': request.form.get('gender'),
+                'zone_id': int(zone_id_raw) if zone_id_raw.isdigit() else None,
+                'sector_number': request.form.get('sector_number'),
+                'district': request.form.get('district'),
+                'province': request.form.get('province'),
+                'cell_category': cell_category,
+                'church': request.form.get('church') == 'true',
+                'branch_id': request.form.get('branch_id') or leader_branch_id,
+                'country': request.form.get('country') or leader_country,
+            }
+            template_name = f'main/member_form{get_template_suffix()}.html'
+            return render_template(
+                template_name,
+                user=session['user'],
+                member=member,
+                is_edit=True,
+                form_errors=form_errors,
+                leader_branch_id=leader_branch_id,
+                leader_branch_name=leader_branch_name,
+                leader_country=leader_country,
+                zone_required=is_miracle_dome_branch(leader_branch_name),
+                zones=zones,
+            )
         
         # Get form values or use leader's values for autofill
         country = request.form.get('country') or leader_country
         branch_id = request.form.get('branch_id') or leader_branch_id
-        cell_category = request.form.get('cell_category') or None
         church = request.form.get('church') == 'true'  # Convert checkbox to boolean
         potential_leader = request.form.get('potential_leader') == 'true'  # Convert checkbox to boolean
         
         # Get zone_id and sector_number - convert empty strings to None
-        zone_id = request.form.get('zone_id', '').strip()
+        zone_id = zone_id_raw
         if zone_id:
             try:
                 zone_id = int(zone_id)
@@ -2883,14 +2986,14 @@ def update_member(member_id):
             sector_number = None
         
         member_data = {
-            'name': request.form.get('name'),
-            'age': int(request.form.get('age')) if request.form.get('age') else None,
+            'name': name,
+            'age': int(age) if age else None,
             'gender': request.form.get('gender') or None,
-            'phone_number': request.form.get('phone_number') or None,
+            'phone_number': phone_number or None,
             'zone_id': zone_id,
             'country': country,
             'branch_id': branch_id,
-            'cell_category': cell_category,
+            'cell_category': cell_category or None,
             'church': church,
             'potential_leader': potential_leader,
             'sector_number': sector_number,
